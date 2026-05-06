@@ -19,6 +19,8 @@ let photoCandidates = [];
 let photoImageDataUrls = [];
 let photoInputMode = "new";
 let localImageModel = null;
+let foodDialogBase100 = { kcal100: 0, protein100: 0, fat100: 0, carbs100: 0 };
+let foodDialogUpdating = false;
 
 function loadState() {
   try {
@@ -40,8 +42,27 @@ function uid() {
   return crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
 }
 function $(id) { return document.getElementById(id); }
-function round(n) { return Math.round((Number(n) || 0) * 10) / 10; }
+function round1(n) {
+  const value = Number(n);
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 10) / 10;
+}
+function round(n) { return round1(n); }
+function format1(n) {
+  const value = round1(n);
+  return Number.isInteger(value) ? String(value) : String(value);
+}
 function todayISO() { return new Date().toISOString().slice(0,10); }
+function normalizeFoodRecord(e) {
+  return {
+    ...e,
+    grams: round1(e.grams ?? 100),
+    kcal100: round1(e.kcal100),
+    protein100: round1(e.protein100),
+    fat100: round1(e.fat100),
+    carbs100: round1(e.carbs100)
+  };
+}
 
 function totalsForDate(date) {
   const items = state.entries.filter(e => e.date === date);
@@ -56,6 +77,8 @@ function totalsForDate(date) {
 }
 
 function render() {
+  state.entries = state.entries.map(normalizeFoodRecord);
+  state.favorites = state.favorites.map(normalizeFoodRecord);
   $("todayLabel").textContent = new Date(state.selectedDate).toLocaleDateString("ru-RU", { weekday:"long", day:"numeric", month:"long" });
   $("datePicker").value = state.selectedDate;
 
@@ -83,6 +106,7 @@ function render() {
   renderEntries();
   renderHistory();
   renderBody();
+  renderAnalytics();
   saveState();
 }
 
@@ -121,7 +145,7 @@ function renderHistory() {
   box.innerHTML = dates.map(date => {
     const t = totalsForDate(date);
     const diff = state.goals.kcal - t.kcal;
-    return `<div class="item" onclick="state.selectedDate='${date}'; switchTab('diary'); render();">
+    return `<div class="item" onclick="selectHistoryDate('${date}')">
       <div class="title">${new Date(date).toLocaleDateString("ru-RU")}</div>
       <div class="meta">${Math.round(t.kcal)} ккал · Б ${Math.round(t.protein)} · Ж ${Math.round(t.fat)} · У ${Math.round(t.carbs)}</div>
       <div class="meta">${diff >= 0 ? "Недобор" : "Превышение"} ${Math.round(Math.abs(diff))} ккал</div>
@@ -141,6 +165,130 @@ function renderBody() {
     <div class="meta">Вес: ${x.weight || "—"} кг · Талия: ${x.waist || "—"} см</div>
     <div class="itemActions"><button class="danger" onclick="deleteBody('${x.id}')">Удалить</button></div>
   </div>`).join("");
+}
+
+function analyticsDates(days = 14) {
+  const end = new Date(state.selectedDate || todayISO());
+  return Array.from({ length: days }, (_, i) => {
+    const d = new Date(end);
+    d.setDate(end.getDate() - (days - 1 - i));
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+function chartX(index, count, left, width) {
+  if (count <= 1) return left + width / 2;
+  return left + (index * width) / (count - 1);
+}
+
+function chartY(value, max, top, height) {
+  return top + height - ((Number(value) || 0) / max) * height;
+}
+
+function renderAnalytics() {
+  const calorieChart = $("calorieChart");
+  const macroChart = $("macroChart");
+  const summary = $("analyticsSummary");
+  if (!calorieChart || !macroChart || !summary) return;
+
+  const dates = analyticsDates(14);
+  const data = dates.map(date => ({ date, ...totalsForDate(date) }));
+  const hasEntries = data.some(x => x.kcal || x.protein || x.fat || x.carbs);
+  if (!hasEntries) {
+    calorieChart.innerHTML = `<p class="muted">Пока нет данных для графика. Добавьте продукты в дневник.</p>`;
+    macroChart.innerHTML = "";
+    summary.innerHTML = "";
+    return;
+  }
+
+  const w = 360;
+  const h = 210;
+  const left = 38;
+  const right = 12;
+  const top = 18;
+  const bottom = 36;
+  const plotW = w - left - right;
+  const plotH = h - top - bottom;
+  const kcalGoal = Math.max(1, Number(state.goals.kcal) || 1);
+  const maxKcal = Math.max(kcalGoal * 1.15, ...data.map(x => x.kcal));
+  const goalY = chartY(kcalGoal, maxKcal, top, plotH);
+  const barGap = 4;
+  const barW = Math.max(10, plotW / data.length - barGap);
+
+  const calorieBars = data.map((x, i) => {
+    const xPos = left + i * (plotW / data.length) + barGap / 2;
+    const y = chartY(x.kcal, maxKcal, top, plotH);
+    const height = top + plotH - y;
+    const cls = x.kcal > kcalGoal ? "over" : x.kcal >= kcalGoal * 0.9 ? "good" : "under";
+    return `<rect class="bar ${cls}" x="${round1(xPos)}" y="${round1(y)}" width="${round1(barW)}" height="${round1(height)}" rx="4"><title>${dateLabelShort(x.date)}: ${Math.round(x.kcal)} ккал</title></rect>`;
+  }).join("");
+
+  const calorieLabels = data.map((x, i) => {
+    if (i % 2 !== 0 && data.length > 8) return "";
+    const xPos = left + i * (plotW / data.length) + barW / 2;
+    return `<text class="axisText" x="${round1(xPos)}" y="${h - 10}" text-anchor="middle">${dateLabelTiny(x.date)}</text>`;
+  }).join("");
+
+  calorieChart.innerHTML = `<h3>Калории по дням</h3>
+    <svg class="chartSvg" viewBox="0 0 ${w} ${h}" role="img" aria-label="График калорий за 14 дней">
+      <line class="axisLine" x1="${left}" y1="${top + plotH}" x2="${w - right}" y2="${top + plotH}" />
+      <line class="goalLine" x1="${left}" y1="${round1(goalY)}" x2="${w - right}" y2="${round1(goalY)}" />
+      <text class="goalText" x="${left}" y="${Math.max(12, round1(goalY - 5))}">цель ${Math.round(kcalGoal)}</text>
+      ${calorieBars}
+      ${calorieLabels}
+    </svg>
+    <div class="chartLegend"><span class="dot good"></span> цель почти выполнена <span class="dot under"></span> недобор <span class="dot over"></span> превышение</div>`;
+
+  const maxMacro = Math.max(1, ...data.map(x => x.protein + x.fat + x.carbs));
+  const macroBars = data.map((x, i) => {
+    const xPos = left + i * (plotW / data.length) + barGap / 2;
+    let yBase = top + plotH;
+    const carbsH = (x.carbs / maxMacro) * plotH;
+    const fatH = (x.fat / maxMacro) * plotH;
+    const proteinH = (x.protein / maxMacro) * plotH;
+    const carbsY = yBase - carbsH;
+    const fatY = carbsY - fatH;
+    const proteinY = fatY - proteinH;
+    return `
+      <rect class="macro carbs" x="${round1(xPos)}" y="${round1(carbsY)}" width="${round1(barW)}" height="${round1(carbsH)}" rx="3"><title>${dateLabelShort(x.date)}: У ${round1(x.carbs)} г</title></rect>
+      <rect class="macro fat" x="${round1(xPos)}" y="${round1(fatY)}" width="${round1(barW)}" height="${round1(fatH)}"><title>${dateLabelShort(x.date)}: Ж ${round1(x.fat)} г</title></rect>
+      <rect class="macro protein" x="${round1(xPos)}" y="${round1(proteinY)}" width="${round1(barW)}" height="${round1(proteinH)}" rx="3"><title>${dateLabelShort(x.date)}: Б ${round1(x.protein)} г</title></rect>`;
+  }).join("");
+
+  macroChart.innerHTML = `<h3>БЖУ по дням</h3>
+    <svg class="chartSvg" viewBox="0 0 ${w} ${h}" role="img" aria-label="График БЖУ за 14 дней">
+      <line class="axisLine" x1="${left}" y1="${top + plotH}" x2="${w - right}" y2="${top + plotH}" />
+      ${macroBars}
+      ${calorieLabels}
+    </svg>
+    <div class="chartLegend"><span class="dot protein"></span> белки <span class="dot fat"></span> жиры <span class="dot carbs"></span> углеводы</div>`;
+
+  const avg = data.reduce((a, x) => {
+    a.kcal += x.kcal;
+    a.protein += x.protein;
+    a.fat += x.fat;
+    a.carbs += x.carbs;
+    return a;
+  }, { kcal: 0, protein: 0, fat: 0, carbs: 0 });
+  const nonEmptyDays = Math.max(1, data.filter(x => x.kcal || x.protein || x.fat || x.carbs).length);
+  const overDays = data.filter(x => x.kcal > kcalGoal).length;
+  const closeDays = data.filter(x => x.kcal >= kcalGoal * 0.9 && x.kcal <= kcalGoal).length;
+  const underDays = data.filter(x => x.kcal > 0 && x.kcal < kcalGoal * 0.9).length;
+
+  summary.innerHTML = `<div class="item">
+    <div class="title">Итоги за период</div>
+    <div class="meta">Среднее: ${Math.round(avg.kcal / nonEmptyDays)} ккал · Б ${round1(avg.protein / nonEmptyDays)} · Ж ${round1(avg.fat / nonEmptyDays)} · У ${round1(avg.carbs / nonEmptyDays)}</div>
+    <div class="meta">Дней с превышением: ${overDays} · около цели: ${closeDays} · недобор: ${underDays}</div>
+  </div>`;
+}
+
+function dateLabelTiny(date) {
+  const d = new Date(date);
+  return `${d.getDate()}.${d.getMonth() + 1}`;
+}
+
+function dateLabelShort(date) {
+  return new Date(date).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
 async function fetchOpenFoodFacts(barcode) {
@@ -168,10 +316,10 @@ async function fetchOpenFoodFacts(barcode) {
     barcode,
     name: p.product_name || `Продукт ${barcode}`,
     grams: 100,
-    kcal100: Number(kcal),
-    protein100: Number(protein),
-    fat100: Number(fat),
-    carbs100: Number(carbs),
+    kcal100: round1(kcal),
+    protein100: round1(protein),
+    fat100: round1(fat),
+    carbs100: round1(carbs),
     meal: "Перекус",
     source: "Источник: Open Food Facts"
   };
@@ -200,10 +348,10 @@ async function fetchOpenFoodFactsByName(searchTerm) {
         barcode: p.code || "",
         name: p.product_name || searchTerm,
         grams: 100,
-        kcal100: Number(kcal),
-        protein100: Number(protein),
-        fat100: Number(fat),
-        carbs100: Number(carbs),
+        kcal100: round1(kcal),
+        protein100: round1(protein),
+        fat100: round1(fat),
+        carbs100: round1(carbs),
         meal: "Перекус",
         source: `Источник: Open Food Facts, поиск по названию «${searchTerm}»`
       };
@@ -833,6 +981,38 @@ async function loadByBarcode(barcode) {
   }
 }
 
+function portionFactor() {
+  const grams = Math.max(0, Number($("gramsInput").value) || 0);
+  return grams / 100 || 1;
+}
+
+function nutrientInputIds() {
+  return [
+    ["kcal100", "kcalInput"],
+    ["protein100", "proteinInput"],
+    ["fat100", "fatInput"],
+    ["carbs100", "carbsInput"]
+  ];
+}
+
+function setPortionNutrientInputsFromBase() {
+  if (foodDialogUpdating) return;
+  foodDialogUpdating = true;
+  const factor = portionFactor();
+  for (const [key, inputId] of nutrientInputIds()) {
+    $(inputId).value = format1((foodDialogBase100[key] || 0) * factor);
+  }
+  foodDialogUpdating = false;
+}
+
+function setBaseNutrientsFromPortionInputs() {
+  if (foodDialogUpdating) return;
+  const factor = portionFactor();
+  for (const [key, inputId] of nutrientInputIds()) {
+    foodDialogBase100[key] = round1((Number($(inputId).value) || 0) / factor);
+  }
+}
+
 function openFoodDialog(entry = null) {
   $("foodDialogTitle").textContent = entry?.id && state.entries.some(x => x.id === entry.id) ? "Редактировать продукт" : "Добавить продукт";
   $("entryId").value = entry?.id || "";
@@ -840,26 +1020,30 @@ function openFoodDialog(entry = null) {
   $("barcodeInput").value = entry?.barcode || "";
   $("mealInput").value = entry?.meal || "Перекус";
   $("gramsInput").value = entry?.grams ?? 100;
-  $("kcalInput").value = entry?.kcal100 ?? 0;
-  $("proteinInput").value = entry?.protein100 ?? 0;
-  $("fatInput").value = entry?.fat100 ?? 0;
-  $("carbsInput").value = entry?.carbs100 ?? 0;
+  foodDialogBase100 = {
+    kcal100: round1(entry?.kcal100 ?? 0),
+    protein100: round1(entry?.protein100 ?? 0),
+    fat100: round1(entry?.fat100 ?? 0),
+    carbs100: round1(entry?.carbs100 ?? 0)
+  };
+  setPortionNutrientInputsFromBase();
   $("sourceInfo").textContent = entry?.source || "Ручной ввод";
   $("foodDialog").showModal();
 }
 
 function readFoodForm() {
+  setBaseNutrientsFromPortionInputs();
   return {
     id: $("entryId").value || uid(),
     date: state.selectedDate,
     barcode: $("barcodeInput").value.trim(),
     name: $("nameInput").value.trim(),
     meal: $("mealInput").value,
-    grams: Number($("gramsInput").value),
-    kcal100: Number($("kcalInput").value),
-    protein100: Number($("proteinInput").value),
-    fat100: Number($("fatInput").value),
-    carbs100: Number($("carbsInput").value),
+    grams: round1($("gramsInput").value),
+    kcal100: round1(foodDialogBase100.kcal100),
+    protein100: round1(foodDialogBase100.protein100),
+    fat100: round1(foodDialogBase100.fat100),
+    carbs100: round1(foodDialogBase100.carbs100),
     source: $("sourceInfo").textContent || "Ручной ввод"
   };
 }
@@ -957,7 +1141,28 @@ function switchTab(tab) {
   $("historyTab").classList.toggle("hidden", tab !== "history");
   $("weightTab").classList.toggle("hidden", tab !== "weight");
   $("exportTab").classList.toggle("hidden", tab !== "export");
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  $("analyticsTab").classList.toggle("hidden", tab !== "analytics");
+
+  const targetId = ({
+    diary: "diaryTab",
+    history: "historyTab",
+    weight: "weightTab",
+    export: "exportTab",
+    analytics: "analyticsTab"
+  })[tab] || "diaryTab";
+
+  requestAnimationFrame(() => {
+    const target = $(targetId);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => target.focus({ preventScroll: true }), 250);
+  });
+}
+
+function selectHistoryDate(date) {
+  state.selectedDate = date;
+  render();
+  switchTab("diary");
 }
 
 function exportJson() {
@@ -1094,6 +1299,24 @@ $("clearBtn").addEventListener("click", () => {
   if (!confirm("Удалить все данные приложения?")) return;
   state = structuredClone(defaultState);
   render();
+});
+
+
+$("gramsInput").addEventListener("input", setPortionNutrientInputsFromBase);
+["kcalInput", "proteinInput", "fatInput", "carbsInput"].forEach(id => {
+  $(id).addEventListener("input", setBaseNutrientsFromPortionInputs);
+});
+$("calorieCard").addEventListener("click", () => switchTab("analytics"));
+$("calorieCard").addEventListener("keydown", e => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    switchTab("analytics");
+  }
+});
+$("analyticsTodayBtn").addEventListener("click", () => {
+  state.selectedDate = todayISO();
+  render();
+  switchTab("analytics");
 });
 
 document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
