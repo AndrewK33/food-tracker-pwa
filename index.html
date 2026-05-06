@@ -121,6 +121,14 @@
     <div id="recognitionScrollArea" class="recognitionScrollArea" tabindex="0" aria-label="Результаты распознавания по фото">
       <div id="recognitionPreviews" class="photoPreviews" hidden></div>
       <p id="recognitionStatus" class="muted">Выберите фото продукта</p>
+      <form id="recognitionSearchForm" class="recognitionSearch" hidden>
+        <label>Не нашли нужный продукт?
+          <div class="inputWithAction">
+            <input id="recognitionSearchInput" type="search" placeholder="Например: гречка, творог, куриная грудка" autocomplete="off">
+            <button type="submit" class="smallBtn primary">Искать</button>
+          </div>
+        </label>
+      </form>
       <div id="recognitionLoader" class="recognitionLoader" hidden>
         <div class="loaderTop">
           <b id="recognitionLoaderTitle">Распознаю продукт</b>
@@ -141,13 +149,22 @@
     </div>
   </dialog>
 
-  <dialog id="foodDialog">
+  <dialog id="photoZoomDialog" class="photoZoomDialog">
+    <div class="dialogHead zoomHead">
+      <b>Фото продукта</b>
+      <button id="closePhotoZoom" type="button" class="ghost recognitionClose" aria-label="Закрыть фото">✕</button>
+    </div>
+    <img id="photoZoomImage" alt="Увеличенное фото продукта">
+  </dialog>
+
+  <dialog id="foodDialog" class="foodEntryDialog">
     <form method="dialog" id="foodForm">
       <div class="dialogHead">
         <b id="foodDialogTitle">Добавить продукт</b>
-        <button value="cancel" class="ghost">✕</button>
+        <button id="closeFoodDialog" type="button" class="ghost" aria-label="Закрыть окно добавления продукта">✕</button>
       </div>
 
+      <div class="foodDialogBody">
       <input type="hidden" id="entryId" />
       <label>Название продукта<input id="nameInput" required placeholder="Например: творог 5%"></label>
       <label>Штрихкод<input id="barcodeInput" placeholder="Необязательно"></label>
@@ -171,9 +188,10 @@
       <p id="portionInfo" class="muted compact">КБЖУ показаны для указанной порции. При изменении веса значения пересчитаются автоматически.</p>
       <p id="sourceInfo" class="muted"></p>
 
-      <div class="row between">
+      <div class="row between foodDialogActions">
         <button type="button" id="favoriteToggle">⭐ В избранное</button>
         <button type="submit" class="primary">Сохранить</button>
+      </div>
       </div>
     </form>
   </dialog>
@@ -182,7 +200,7 @@
     <form method="dialog" id="settingsForm">
       <div class="dialogHead">
         <b>Дневные нормы</b>
-        <button value="cancel" class="ghost">✕</button>
+        <button id="closeSettingsDialog" type="button" class="ghost" aria-label="Закрыть настройки">✕</button>
       </div>
       <div class="formgrid">
         <label>Калории<input id="goalKcalInput" type="number" step="10" min="1000"></label>

@@ -1246,6 +1246,8 @@ function openPhotoPicker(mode = "new") {
 
 function renderPhotoPreviews() {
   const box = $("recognitionPreviews");
+  if (!box) return;
+
   if (!photoImageDataUrls.length) {
     box.hidden = true;
     box.innerHTML = "";
@@ -1253,12 +1255,36 @@ function renderPhotoPreviews() {
   }
 
   box.hidden = false;
-  box.innerHTML = photoImageDataUrls.map((src, index) => `
-    <div class="photoThumb">
-      <img src="${src}" alt="Фото ${index + 1}">
-      <span>${index + 1}</span>
+  box.innerHTML = `
+    <div class="photoPreviewsHead">Участвуют ${photoImageDataUrls.length} из 3 фото</div>
+    <div class="photoThumbsRow">
+      ${photoImageDataUrls.map((src, index) => `
+        <button class="photoThumb" type="button" onclick="zoomRecognitionPhoto(${index})" aria-label="Открыть фото ${index + 1}">
+          <img src="${src}" alt="Фото ${index + 1}">
+          <span>${index + 1}</span>
+        </button>
+      `).join("")}
     </div>
-  `).join("");
+  `;
+}
+
+function zoomRecognitionPhoto(index) {
+  const src = photoImageDataUrls[index];
+  if (!src) return;
+  $("photoZoomImage").src = src;
+  $("photoZoomDialog").showModal();
+}
+
+function closePhotoZoomDialog() {
+  $("photoZoomDialog").close();
+  $("photoZoomImage").src = "";
+}
+
+function setRecognitionSearchVisible(visible, value = "") {
+  const form = $("recognitionSearchForm");
+  if (!form) return;
+  form.hidden = !visible;
+  if (value) $("recognitionSearchInput").value = value;
 }
 
 function scrollRecognitionDialogTop() {
@@ -1273,6 +1299,7 @@ async function rerunPhotoRecognition() {
   const providerText = state.ai?.useOpenAI && state.ai?.openAiApiKey ? "через OpenAI" : "локально через Food-101 + словарь";
   $("recognitionStatus").textContent = `Распознаю ${providerText}. Фото: ${count}...`;
   $("recognitionList").innerHTML = "";
+  setRecognitionSearchVisible(false);
   setRecognitionLoader(true, "Распознаю продукт", count > 1 ? `Анализирую ${count} фото одного продукта.` : "Первый запуск может занять дольше из-за загрузки локальной модели еды.");
   startSoftRecognitionProgress(7, 88);
 
@@ -1294,30 +1321,40 @@ async function handlePhotoSelected(event) {
   const file = event.target.files?.[0];
   if (!file) return;
 
+  const modeAtSelect = photoInputMode;
+
   try {
     if (!$('recognitionDialog').open) $("recognitionDialog").showModal();
     scrollRecognitionDialogTop();
+    setRecognitionSearchVisible(false);
 
-    if (photoInputMode === "new") {
+    if (modeAtSelect === "new") {
       photoImageDataUrls = [];
       photoCandidates = [];
     }
 
-    if (photoInputMode === "add" && photoImageDataUrls.length >= 3) {
-      $("recognitionStatus").textContent = "Для простоты можно добавить до 3 фото. Этого обычно достаточно.";
+    if (modeAtSelect === "add" && photoImageDataUrls.length >= 3) {
+      $("recognitionStatus").textContent = "Уже участвуют 3 фото. Этого достаточно для распознавания.";
+      renderPhotoPreviews();
       return;
     }
 
-    $("recognitionStatus").textContent = photoInputMode === "add" ? "Добавляю фото..." : "Готовлю фото...";
+    $("recognitionStatus").textContent = modeAtSelect === "add"
+      ? `Добавляю фото ${photoImageDataUrls.length + 1} из 3. Предыдущие фото сохраняются.`
+      : "Готовлю новое фото...";
     $("recognitionList").innerHTML = "";
 
     const imageDataUrl = await resizeImageToDataUrl(file);
     photoImageDataUrls.push(imageDataUrl);
+    renderPhotoPreviews();
     await rerunPhotoRecognition();
   } catch (e) {
-    $("recognitionStatus").textContent = e.message || "Не удалось распознать фото";
+    hideRecognitionLoader();
+    setRecognitionSearchVisible(true);
+    $("recognitionStatus").textContent = e.message || "Не удалось распознать фото. Можно ввести название вручную и выполнить поиск.";
     $("recognitionList").innerHTML = "";
   } finally {
+    photoInputMode = "new";
     event.target.value = "";
   }
 }
@@ -1327,13 +1364,15 @@ function renderRecognitionCandidates(candidates, warning = "") {
 
   if (!candidates.length) {
     hideRecognitionLoader();
-    $("recognitionStatus").textContent = warning || "Не удалось определить продукт. Введите вручную.";
+    setRecognitionSearchVisible(true);
+    $("recognitionStatus").textContent = warning || "Не удалось определить продукт. Введите своё название и выполните поиск.";
     $("recognitionList").innerHTML = "";
     return;
   }
 
-  const photoCountText = photoImageDataUrls.length > 1 ? ` Учтено фото: ${photoImageDataUrls.length}.` : "";
-  $("recognitionStatus").textContent = warning || `Все варианты показаны по-русски.${photoCountText} Проверьте вариант, затем укажите вес.`;
+  setRecognitionSearchVisible(true);
+  const photoCountText = photoImageDataUrls.length > 1 ? ` Участвуют ${photoImageDataUrls.length} фото.` : "";
+  $("recognitionStatus").textContent = warning || `Все варианты показаны по-русски.${photoCountText} Можно выбрать вариант или ввести своё название выше.`;
   $("recognitionList").innerHTML = candidates.map((c, i) => `
     <div class="item">
       <div class="title">${escapeHtml(c.name)}</div>
@@ -1433,6 +1472,8 @@ function resetPhotoRecognitionState() {
   photoImageDataUrls = [];
   photoInputMode = "new";
   renderPhotoPreviews();
+  setRecognitionSearchVisible(false);
+  $("recognitionSearchInput").value = "";
   $("recognitionList").innerHTML = "";
 }
 
@@ -1448,17 +1489,60 @@ function openManualFromRecognition() {
 }
 
 function retakeRecognitionPhoto() {
-  $("recognitionStatus").textContent = "Сделайте новое фото. Старый результат заменится после выбора снимка.";
+  $("recognitionStatus").textContent = "Сделайте новое фото. Старые фото заменятся только после выбора нового снимка.";
   openPhotoPicker("new");
 }
 
 function addRecognitionPhoto() {
   if (photoImageDataUrls.length >= 3) {
-    $("recognitionStatus").textContent = "Можно добавить до 3 фото. Лучше выбрать самый понятный результат или сделать новое фото.";
+    $("recognitionStatus").textContent = "Уже участвуют 3 фото. Можно выбрать вариант или сделать новое фото с нуля.";
+    renderPhotoPreviews();
     return;
   }
-  $("recognitionStatus").textContent = "Добавьте фото с другого ракурса: сверху, ближе или при лучшем свете.";
+  $("recognitionStatus").textContent = `Добавьте ещё фото. Сейчас участвуют ${photoImageDataUrls.length} фото, они не удалятся.`;
+  renderPhotoPreviews();
   openPhotoPicker("add");
+}
+
+async function searchNutritionByCustomRecognitionWord(event) {
+  event.preventDefault();
+  const query = $("recognitionSearchInput").value.trim();
+  if (!query) {
+    $("recognitionSearchInput").focus();
+    return;
+  }
+
+  $("recognitionStatus").textContent = `Ищу КБЖУ по запросу «${query}»...`;
+  $("recognitionList").innerHTML = "";
+  setRecognitionLoader(true, "Ищу продукт", "Пробую найти КБЖУ по вашему названию.");
+  updateRecognitionProgress(35, "Ищу продукт", "Запрос к базе продуктов...");
+
+  try {
+    const product = await fetchOpenFoodFactsByName(query);
+    hideRecognitionLoader();
+    $("recognitionDialog").close();
+    resetPhotoRecognitionState();
+    product.name = product.name || query;
+    product.source = `${product.source}; найдено по вашему запросу «${query}»`;
+    openFoodDialog(product);
+  } catch (e) {
+    hideRecognitionLoader();
+    $("recognitionDialog").close();
+    resetPhotoRecognitionState();
+    openFoodDialog({
+      id: uid(),
+      date: state.selectedDate,
+      barcode: "",
+      name: query,
+      grams: 100,
+      kcal100: 0,
+      protein100: 0,
+      fat100: 0,
+      carbs100: 0,
+      meal: "Перекус",
+      source: `По запросу «${query}» КБЖУ не найдено. Введите значения вручную.`
+    });
+  }
 }
 
 async function openScanner() {
@@ -1552,6 +1636,10 @@ function openFoodDialog(entry = null) {
   $("foodDialog").showModal();
 }
 
+function closeFoodDialogWithoutSaving() {
+  $("foodDialog").close();
+}
+
 function readFoodForm() {
   setBaseNutrientsFromPortionInputs();
   return {
@@ -1579,6 +1667,8 @@ $("foodForm").addEventListener("submit", e => {
   $("foodDialog").close();
   render();
 });
+
+$("closeFoodDialog").addEventListener("click", closeFoodDialogWithoutSaving);
 
 $("favoriteToggle").addEventListener("click", () => {
   const item = readFoodForm();
@@ -1726,6 +1816,35 @@ function openExternalUrl(url) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+let modalScrollY = 0;
+function updateDialogBodyLock() {
+  const hasOpenDialog = [...document.querySelectorAll("dialog")].some(dialog => dialog.open);
+  if (hasOpenDialog && !document.body.classList.contains("modalOpen")) {
+    modalScrollY = window.scrollY || 0;
+    document.body.style.top = `-${modalScrollY}px`;
+    document.body.classList.add("modalOpen");
+  } else if (!hasOpenDialog && document.body.classList.contains("modalOpen")) {
+    document.body.classList.remove("modalOpen");
+    document.body.style.top = "";
+    window.scrollTo(0, modalScrollY);
+  }
+}
+
+function setupDialogBodyLock() {
+  const nativeShowModal = HTMLDialogElement.prototype.showModal;
+  HTMLDialogElement.prototype.showModal = function(...args) {
+    const result = nativeShowModal.apply(this, args);
+    updateDialogBodyLock();
+    return result;
+  };
+  document.querySelectorAll("dialog").forEach(dialog => {
+    dialog.addEventListener("close", updateDialogBodyLock);
+    dialog.addEventListener("cancel", () => setTimeout(updateDialogBodyLock, 0));
+  });
+}
+
+setupDialogBodyLock();
+
 $("helpBtn").addEventListener("click", () => $("helpMenuDialog").showModal());
 $("closeHelpMenu").addEventListener("click", () => $("helpMenuDialog").close());
 $("apiKeyHelpFromMenu").addEventListener("click", openApiKeyHelp);
@@ -1737,6 +1856,11 @@ $("closeApiKeyHelpBottom").addEventListener("click", () => $("apiKeyHelpDialog")
 $("goToKeySettingsBtn").addEventListener("click", openSettingsAndFocusApiKey);
 $("openApiKeysBtn").addEventListener("click", () => openExternalUrl("https://platform.openai.com/api-keys"));
 $("closePhotoHelp").addEventListener("click", () => $("photoHelpDialog").close());
+$("closePhotoZoom").addEventListener("click", closePhotoZoomDialog);
+$("photoZoomDialog").addEventListener("click", e => {
+  if (e.target.id === "photoZoomDialog") closePhotoZoomDialog();
+});
+$("recognitionSearchForm").addEventListener("submit", searchNutritionByCustomRecognitionWord);
 $("toggleAiKeyBtn").addEventListener("click", () => {
   const input = $("openAiKeyInput");
   const button = $("toggleAiKeyBtn");
@@ -1775,6 +1899,7 @@ $("settingsBtn").addEventListener("click", () => {
   $("openAiModelInput").value = state.ai?.openAiModel || "gpt-4.1-mini";
   $("settingsDialog").showModal();
 });
+$("closeSettingsDialog").addEventListener("click", () => $("settingsDialog").close());
 $("settingsForm").addEventListener("submit", e => {
   e.preventDefault();
   state.goals = {
