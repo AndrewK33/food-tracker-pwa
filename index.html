@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#101828" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Питание" />
+  <title>Дневник питания</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="top">
+      <div>
+        <h1>Дневник питания</h1>
+        <p id="todayLabel" class="muted"></p>
+      </div>
+      <button id="settingsBtn" class="ghost">⚙️</button>
+    </header>
+
+    <section class="card">
+      <div class="row between">
+        <div>
+          <div class="muted">Калории</div>
+          <div class="big"><span id="caloriesToday">0</span> / <span id="caloriesGoal">2200</span> ккал</div>
+        </div>
+        <div id="calorieStatus" class="pill">Осталось 2200</div>
+      </div>
+      <div class="progress"><div id="calorieProgress"></div></div>
+    </section>
+
+    <section class="grid3">
+      <div class="card mini"><div class="muted">Белки</div><b><span id="proteinToday">0</span> / <span id="proteinGoal">160</span> г</b></div>
+      <div class="card mini"><div class="muted">Жиры</div><b><span id="fatToday">0</span> / <span id="fatGoal">70</span> г</b></div>
+      <div class="card mini"><div class="muted">Углеводы</div><b><span id="carbsToday">0</span> / <span id="carbsGoal">220</span> г</b></div>
+    </section>
+
+    <section class="actions">
+      <button id="scanBtn" class="primary">📷 Сканировать</button>
+      <button id="manualBtn">✍️ Добавить вручную</button>
+      <button id="favoritesBtn">⭐ Избранное</button>
+      <button id="copyYesterdayBtn">↩️ Вчерашнее</button>
+    </section>
+
+    <section class="card">
+      <div class="row between">
+        <h2>Сегодня</h2>
+        <input id="datePicker" type="date" />
+      </div>
+      <div id="entriesList" class="list"></div>
+    </section>
+
+    <nav class="tabs">
+      <button data-tab="diary" class="active">Дневник</button>
+      <button data-tab="history">История</button>
+      <button data-tab="weight">Вес</button>
+      <button data-tab="export">Данные</button>
+    </nav>
+
+    <section id="historyTab" class="card hidden">
+      <h2>История по дням</h2>
+      <div id="historyList" class="list"></div>
+    </section>
+
+    <section id="weightTab" class="card hidden">
+      <h2>Вес и талия</h2>
+      <div class="formgrid">
+        <label>Вес, кг<input id="weightInput" type="number" step="0.1" placeholder="98.0"></label>
+        <label>Талия, см<input id="waistInput" type="number" step="0.1" placeholder="100"></label>
+      </div>
+      <button id="saveBodyBtn" class="primary">Сохранить замер</button>
+      <div id="bodyList" class="list"></div>
+    </section>
+
+    <section id="exportTab" class="card hidden">
+      <h2>Данные</h2>
+      <p class="muted">Все записи хранятся в памяти браузера на телефоне. Можно экспортировать резервную копию в JSON.</p>
+      <button id="exportBtn">⬇️ Экспорт JSON</button>
+      <label class="fileLabel">⬆️ Импорт JSON<input id="importFile" type="file" accept="application/json"></label>
+      <button id="clearBtn" class="danger">Удалить все данные</button>
+    </section>
+  </div>
+
+  <dialog id="scannerDialog">
+    <div class="dialogHead">
+      <b>Сканирование штрихкода</b>
+      <button id="closeScanner" class="ghost">✕</button>
+    </div>
+    <video id="video" playsinline></video>
+    <p id="scannerStatus" class="muted">Наведите камеру на штрихкод</p>
+  </dialog>
+
+  <dialog id="foodDialog">
+    <form method="dialog" id="foodForm">
+      <div class="dialogHead">
+        <b id="foodDialogTitle">Добавить продукт</b>
+        <button value="cancel" class="ghost">✕</button>
+      </div>
+
+      <input type="hidden" id="entryId" />
+      <label>Название продукта<input id="nameInput" required placeholder="Например: творог 5%"></label>
+      <label>Штрихкод<input id="barcodeInput" placeholder="Необязательно"></label>
+      <label>Прием пищи
+        <select id="mealInput">
+          <option>Завтрак</option>
+          <option>Обед</option>
+          <option>Ужин</option>
+          <option>Перекус</option>
+        </select>
+      </label>
+
+      <div class="formgrid">
+        <label>Порция, г<input id="gramsInput" type="number" step="1" min="1" value="100" required></label>
+        <label>Ккал / 100 г<input id="kcalInput" type="number" step="0.1" min="0" required></label>
+        <label>Белки / 100 г<input id="proteinInput" type="number" step="0.1" min="0" required></label>
+        <label>Жиры / 100 г<input id="fatInput" type="number" step="0.1" min="0" required></label>
+        <label>Углеводы / 100 г<input id="carbsInput" type="number" step="0.1" min="0" required></label>
+      </div>
+
+      <p id="sourceInfo" class="muted"></p>
+
+      <div class="row between">
+        <button type="button" id="favoriteToggle">⭐ В избранное</button>
+        <button type="submit" class="primary">Сохранить</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog">
+    <form method="dialog" id="settingsForm">
+      <div class="dialogHead">
+        <b>Дневные нормы</b>
+        <button value="cancel" class="ghost">✕</button>
+      </div>
+      <div class="formgrid">
+        <label>Калории<input id="goalKcalInput" type="number" step="10" min="1000"></label>
+        <label>Белки, г<input id="goalProteinInput" type="number" step="1" min="0"></label>
+        <label>Жиры, г<input id="goalFatInput" type="number" step="1" min="0"></label>
+        <label>Углеводы, г<input id="goalCarbsInput" type="number" step="1" min="0"></label>
+      </div>
+      <button type="submit" class="primary">Сохранить нормы</button>
+    </form>
+  </dialog>
+
+  <dialog id="favoritesDialog">
+    <div class="dialogHead">
+      <b>Избранные продукты</b>
+      <button id="closeFavorites" class="ghost">✕</button>
+    </div>
+    <div id="favoritesList" class="list"></div>
+  </dialog>
+
+  <script src="https://unpkg.com/@zxing/browser@latest"></script>
+  <script src="app.js"></script>
+</body>
+</html>
