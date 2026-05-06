@@ -112,15 +112,28 @@
   </dialog>
 
 
-  <dialog id="recognitionDialog">
-    <div class="dialogHead">
+  <dialog id="recognitionDialog" class="photoRecognitionDialog">
+    <div class="dialogHead recognitionHead">
       <b>Добавить продукт по фото</b>
-      <button id="closeRecognition" class="ghost">✕</button>
+      <button id="closeRecognition" class="ghost recognitionClose" aria-label="Закрыть распознавание">✕</button>
     </div>
-    <div id="recognitionPreviews" class="photoPreviews" hidden></div>
-    <p id="recognitionStatus" class="muted">Выберите фото продукта</p>
-    <div id="recognitionList" class="list"></div>
-    <div class="recognitionFooter">
+
+    <div id="recognitionScrollArea" class="recognitionScrollArea" tabindex="0" aria-label="Результаты распознавания по фото">
+      <div id="recognitionPreviews" class="photoPreviews" hidden></div>
+      <p id="recognitionStatus" class="muted">Выберите фото продукта</p>
+      <div id="recognitionLoader" class="recognitionLoader" hidden>
+        <div class="loaderTop">
+          <b id="recognitionLoaderTitle">Распознаю продукт</b>
+          <span id="recognitionLoaderPercent">0%</span>
+        </div>
+        <div class="loaderTrack"><div id="recognitionLoaderBar"></div></div>
+        <p id="recognitionLoaderHint" class="muted compact">Первый запуск может занять дольше, потому что загружается локальная модель еды.</p>
+      </div>
+      <div id="recognitionList" class="list"></div>
+      <div class="scrollHint" aria-hidden="true"><span></span> Листайте ниже — действия всегда внизу</div>
+    </div>
+
+    <div class="recognitionFooter" aria-label="Действия с фото">
       <button id="recognitionRetakeBtn" type="button" class="primary">📸 Новое фото</button>
       <button id="recognitionAddPhotoBtn" type="button">➕ Добавить ещё фото</button>
       <button id="recognitionManualBtn" type="button">Ввести вручную</button>
@@ -182,7 +195,7 @@
       <div class="sectionHead">
         <div>
           <b>Распознавание по фото</b>
-          <p class="muted compact">Бесплатный режим работает локально. OpenAI можно включить отдельно, если нужен более точный вариант.</p>
+          <p class="muted compact">Бесплатный режим работает локально через Food-101. OpenAI можно включить отдельно, если нужен более точный вариант.</p>
         </div>
         <button id="apiKeyHelpBtn" type="button" class="ghost helpBubble" aria-label="Как добавить OpenAI API-ключ для увеличения точности распознавания">?</button>
       </div>
@@ -190,7 +203,7 @@
       <div class="tipCard">
         <div>
           <b>Без ключа тоже работает</b>
-          <p class="muted compact">Сначала попробуйте фото без OpenAI. Ключ нужен только для более точного распознавания.</p>
+          <p class="muted compact">Сначала попробуйте фото без OpenAI. Локальная модель Food-101 работает прямо на устройстве, а ключ нужен только для ещё более точного распознавания.</p>
         </div>
       </div>
 
@@ -275,6 +288,7 @@
     </div>
     <ol class="steps">
       <li><b>Нажми “📸 По фото”.</b><br><span class="muted">Сфотографируй продукт или выбери фото из галереи.</span></li>
+      <li><b>Дождись полоски загрузки.</b><br><span class="muted">При первом запуске локальная модель еды может загружаться дольше. Потом обычно быстрее.</span></li>
       <li><b>Выбери подходящий вариант.</b><br><span class="muted">ИИ может ошибаться, поэтому всегда проверяй название.</span></li>
       <li><b>Введи вес.</b><br><span class="muted">Приложение не угадывает вес по фото. Вес лучше взять с упаковки или кухонных весов.</span></li>
       <li><b>Проверь КБЖУ и сохрани.</b><br><span class="muted">Если данных нет, введи значения вручную с этикетки.</span></li>

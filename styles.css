@@ -4,3 +4,126 @@
 @media(max-width:420px){.recognitionFooter{grid-template-columns:1fr}.recognitionFooter #recognitionManualBtn,.recognitionFooter #recognitionBackBtn{grid-column:auto}}
 
 .tappable{cursor:pointer;outline:none}.tappable:focus-visible{box-shadow:0 0 0 4px #d1e0ff,0 8px 24px rgba(16,24,40,.06)}.chartBox{background:#f9fafb;border:1px solid #eaecf0;border-radius:16px;padding:12px;margin:12px 0;overflow:hidden}.chartBox h3{margin:0 0 8px;font-size:16px}.chartSvg{width:100%;height:auto;display:block}.axisLine{stroke:#d0d5dd;stroke-width:1}.goalLine{stroke:#f79009;stroke-width:1.5;stroke-dasharray:5 4}.goalText,.axisText{fill:#667085;font-size:10px}.bar{transition:opacity .15s}.bar.good{fill:#12b76a}.bar.under{fill:#84adff}.bar.over{fill:#f04438}.macro.protein,.dot.protein{fill:#3538cd;background:#3538cd}.macro.fat,.dot.fat{fill:#f79009;background:#f79009}.macro.carbs,.dot.carbs{fill:#12b76a;background:#12b76a}.chartLegend{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:#667085;font-size:12px;margin-top:8px}.dot{width:10px;height:10px;border-radius:999px;display:inline-block}.dot.good{background:#12b76a}.dot.under{background:#84adff}.dot.over{background:#f04438}@media(max-width:380px){.tabs button{font-size:11px;padding:9px 2px}.chartBox{padding:10px}}
+
+.recognitionLoader{background:#f9fafb;border:1px solid #eaecf0;border-radius:16px;padding:12px;margin:10px 0 12px}.loaderTop{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.loaderTop b{font-size:14px}.loaderTop span{font-weight:800;color:#3538cd;white-space:nowrap}.loaderTrack{height:12px;background:#eaecf0;border-radius:999px;overflow:hidden}.loaderTrack>div{height:100%;width:0;background:#3538cd;border-radius:999px;transition:width .25s ease}.recognitionLoader[hidden]{display:none}
+
+
+/* Улучшения UX окна распознавания по фото */
+#recognitionDialog.photoRecognitionDialog{
+  width:min(94vw,520px);
+  max-height:min(90dvh,760px);
+  padding:0;
+  overflow:hidden;
+}
+#recognitionDialog.photoRecognitionDialog[open]{
+  display:flex;
+  flex-direction:column;
+}
+#recognitionDialog .recognitionHead{
+  flex:0 0 auto;
+  margin:0;
+  padding:12px 14px 10px 16px;
+  border-bottom:1px solid #eaecf0;
+  background:#fff;
+  gap:12px;
+}
+#recognitionDialog .recognitionHead b{
+  font-size:17px;
+  line-height:1.25;
+}
+#closeRecognition.recognitionClose{
+  width:52px;
+  min-width:52px;
+  height:52px;
+  border-radius:16px;
+  background:#f2f4f7;
+  color:#101828;
+  font-size:26px;
+  line-height:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+  border:1px solid #eaecf0;
+}
+#closeRecognition.recognitionClose:active{
+  transform:scale(.96);
+}
+.recognitionScrollArea{
+  position:relative;
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  padding:12px 16px 8px;
+  scroll-padding-bottom:76px;
+}
+.recognitionScrollArea::after{
+  content:"";
+  position:sticky;
+  bottom:-8px;
+  display:block;
+  height:22px;
+  margin-top:-18px;
+  pointer-events:none;
+  background:linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.96));
+}
+.scrollHint{
+  position:sticky;
+  bottom:4px;
+  z-index:2;
+  width:max-content;
+  max-width:100%;
+  margin:12px auto 2px;
+  padding:7px 11px;
+  border-radius:999px;
+  background:rgba(16,24,40,.06);
+  color:#667085;
+  font-size:12px;
+  font-weight:700;
+  text-align:center;
+}
+.scrollHint span{
+  display:inline-block;
+  width:34px;
+  height:4px;
+  border-radius:999px;
+  background:#d0d5dd;
+  vertical-align:middle;
+  margin-right:6px;
+}
+#recognitionDialog .recognitionFooter{
+  flex:0 0 auto;
+  margin:0;
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+  background:#fff;
+  border-top:1px solid #eaecf0;
+  box-shadow:0 -10px 28px rgba(16,24,40,.08);
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+#recognitionDialog .recognitionFooter button{
+  min-height:52px;
+  touch-action:manipulation;
+}
+@media(max-width:420px){
+  #recognitionDialog.photoRecognitionDialog{
+    width:96vw;
+    max-height:88dvh;
+    border-radius:22px;
+  }
+  #recognitionDialog .recognitionFooter{
+    grid-template-columns:1fr;
+  }
+  #closeRecognition.recognitionClose{
+    width:56px;
+    min-width:56px;
+    height:56px;
+    font-size:28px;
+  }
+  .scrollHint{
+    font-size:11px;
+  }
+}
