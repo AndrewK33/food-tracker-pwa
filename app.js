@@ -616,6 +616,158 @@ const FOOD101_RU_MAP = {
   waffles: "вафли"
 };
 
+const SMART_FOOD_DICTIONARY = [
+  {
+    triggers: ["omelette", "eggs_benedict", "deviled_eggs", "egg", "яйцо", "омлет"],
+    suggestions: [
+      { name: "омлет", searchName: "omelet", state: "dish" },
+      { name: "яйцо", searchName: "egg", state: "raw" }
+    ]
+  },
+  {
+    triggers: ["chicken", "курица", "quesadilla", "wings", "curry"],
+    suggestions: [
+      { name: "курица", searchName: "chicken", state: "cooked" },
+      { name: "куриная грудка", searchName: "chicken breast", state: "cooked" }
+    ]
+  },
+  {
+    triggers: ["beef", "steak", "filet_mignon", "prime_rib", "carpaccio", "tartare", "говядина", "стейк"],
+    suggestions: [
+      { name: "говядина", searchName: "beef", state: "cooked" },
+      { name: "стейк", searchName: "steak", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["pork", "pulled_pork", "pork_chop", "ribs", "свинина"],
+    suggestions: [
+      { name: "свинина", searchName: "pork", state: "cooked" },
+      { name: "свиная отбивная", searchName: "pork chop", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["salmon", "sashimi", "tuna", "fish", "seafood", "shrimp", "scallops", "mussels", "oysters", "лосось", "рыба"],
+    suggestions: [
+      { name: "рыба", searchName: "fish", state: "cooked" },
+      { name: "лосось", searchName: "salmon", state: "cooked" },
+      { name: "тунец", searchName: "tuna", state: "raw" }
+    ]
+  },
+  {
+    triggers: ["rice", "risotto", "fried_rice", "paella", "bibimbap", "рис"],
+    suggestions: [
+      { name: "рис", searchName: "rice", state: "cooked" },
+      { name: "жареный рис", searchName: "fried rice", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["spaghetti", "pasta", "ravioli", "lasagna", "macaroni", "gnocchi", "carbonara", "bolognese", "паста", "макароны"],
+    suggestions: [
+      { name: "паста", searchName: "pasta", state: "cooked" },
+      { name: "макароны", searchName: "macaroni", state: "cooked" }
+    ]
+  },
+  {
+    triggers: ["french_fries", "poutine", "potato", "картофель", "картошка"],
+    suggestions: [
+      { name: "картофель", searchName: "potato", state: "cooked" },
+      { name: "картофель фри", searchName: "french fries", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["salad", "caesar_salad", "greek_salad", "beet_salad", "caprese_salad", "seaweed_salad", "салат"],
+    suggestions: [
+      { name: "салат", searchName: "salad", state: "dish" },
+      { name: "овощной салат", searchName: "vegetable salad", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["soup", "chowder", "bisque", "pho", "ramen", "miso", "суп"],
+    suggestions: [
+      { name: "суп", searchName: "soup", state: "dish" },
+      { name: "рамен", searchName: "ramen", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["bread", "toast", "sandwich", "bagel", "bruschetta", "хлеб", "бутерброд"],
+    suggestions: [
+      { name: "хлеб", searchName: "bread", state: "baked" },
+      { name: "бутерброд", searchName: "sandwich", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["cheese", "cheesecake", "cheese_plate", "grilled_cheese", "сыр"],
+    suggestions: [
+      { name: "сыр", searchName: "cheese", state: "packaged" },
+      { name: "творог", searchName: "cottage cheese", state: "packaged" }
+    ]
+  },
+  {
+    triggers: ["yogurt", "frozen_yogurt", "йогурт"],
+    suggestions: [
+      { name: "йогурт", searchName: "yogurt", state: "packaged" },
+      { name: "творог", searchName: "cottage cheese", state: "packaged" }
+    ]
+  },
+  {
+    triggers: ["pancakes", "waffles", "french_toast", "breakfast", "панкейки", "вафли"],
+    suggestions: [
+      { name: "панкейки", searchName: "pancakes", state: "dish" },
+      { name: "овсянка", searchName: "oatmeal", state: "cooked" }
+    ]
+  },
+  {
+    triggers: ["pizza", "пицца"],
+    suggestions: [
+      { name: "пицца", searchName: "pizza", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["hamburger", "burger", "sandwich", "бургер"],
+    suggestions: [
+      { name: "бургер", searchName: "burger", state: "dish" },
+      { name: "сэндвич", searchName: "sandwich", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["sushi", "sashimi", "rolls", "суши", "роллы"],
+    suggestions: [
+      { name: "суши", searchName: "sushi", state: "dish" },
+      { name: "роллы", searchName: "sushi rolls", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["dumplings", "gyoza", "ravioli", "пельмени", "вареники"],
+    suggestions: [
+      { name: "пельмени", searchName: "dumplings", state: "dish" },
+      { name: "вареники", searchName: "dumplings", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["cake", "pie", "donuts", "churros", "tiramisu", "baklava", "dessert", "торт", "пирог"],
+    suggestions: [
+      { name: "десерт", searchName: "dessert", state: "dish" },
+      { name: "торт", searchName: "cake", state: "dish" }
+    ]
+  },
+  {
+    triggers: ["banana", "apple", "orange", "pear", "lemon", "strawberry", "pineapple", "fruit", "фрукт", "яблоко", "банан"],
+    suggestions: [
+      { name: "банан", searchName: "banana", state: "raw" },
+      { name: "яблоко", searchName: "apple", state: "raw" },
+      { name: "апельсин", searchName: "orange", state: "raw" }
+    ]
+  },
+  {
+    triggers: ["cucumber", "tomato", "carrot", "broccoli", "cauliflower", "cabbage", "vegetable", "овощ", "огурец", "морковь"],
+    suggestions: [
+      { name: "огурец", searchName: "cucumber", state: "raw" },
+      { name: "помидор", searchName: "tomato", state: "raw" },
+      { name: "морковь", searchName: "carrot", state: "raw" }
+    ]
+  }
+];
+
 function containsCyrillic(text) {
   return /[А-Яа-яЁё]/.test(String(text || ""));
 }
@@ -762,8 +914,57 @@ function mapFood101Label(label) {
     normalizedName: name,
     searchName: String(label || "").replace(/_/g, " ").trim(),
     state: "dish",
-    isFood: true
+    isFood: true,
+    rawLabel: String(label || ""),
+    labelKey: key
   };
+}
+
+function textForSmartDictionary(candidate = {}) {
+  return [candidate.labelKey, candidate.rawLabel, candidate.searchName, candidate.normalizedName, candidate.name]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function smartDictionaryCandidatesFor(candidate = {}) {
+  const text = textForSmartDictionary(candidate);
+  if (!text) return [];
+
+  const result = [];
+  const baseConfidence = Math.max(0.28, Math.min(0.72, (Number(candidate.confidence) || 0.35) * 0.82));
+
+  for (const group of SMART_FOOD_DICTIONARY) {
+    const isMatch = group.triggers.some(trigger => {
+      const normalizedTrigger = food101Key(trigger).replace(/_/g, " ");
+      return text.includes(String(trigger).toLowerCase()) || text.includes(normalizedTrigger);
+    });
+
+    if (!isMatch) continue;
+
+    for (const suggestion of group.suggestions) {
+      result.push({
+        name: suggestion.name,
+        normalizedName: suggestion.name,
+        searchName: suggestion.searchName || suggestion.name,
+        state: suggestion.state || "unknown",
+        confidence: baseConfidence,
+        isFood: true,
+        source: "smart_dictionary",
+        notes: `Подсказка из словаря популярных продуктов на основе варианта «${candidate.name || candidate.normalizedName || "еда"}». Проверьте перед сохранением.`
+      });
+    }
+  }
+
+  return result;
+}
+
+function addSmartDictionaryCandidates(candidates = []) {
+  const generated = [];
+  for (const candidate of candidates) {
+    generated.push(...smartDictionaryCandidatesFor(candidate));
+  }
+  return [...candidates, ...generated];
 }
 
 async function loadTransformersModule() {
@@ -816,7 +1017,7 @@ async function loadFood101Classifier() {
 
 async function recognizeFoodWithFood101(imageDataUrls) {
   const images = asImageArray(imageDataUrls);
-  updateRecognitionProgress(10, "Готовлю локальную модель еды", "Используется открытая Food-101 модель. Фото остаётся на устройстве.");
+  updateRecognitionProgress(10, "Готовлю локальную модель еды", "Используется Food-101 и русский словарь популярных продуктов. Фото остаётся на устройстве.");
   const classifier = await loadFood101Classifier();
 
   const allCandidates = [];
@@ -828,24 +1029,25 @@ async function recognizeFoodWithFood101(imageDataUrls) {
       allCandidates.push({
         ...mapped,
         confidence: Number(prediction.score || 0),
-        notes: "Улучшенная локальная Food-101 модель нашла похожее блюдо. Проверьте перед сохранением.",
+        notes: "Food-101 нашла похожее блюдо. Словарь добавит более привычные варианты продуктов.",
         source: "food101"
       });
     }
   }
 
-  const candidates = mergePhotoCandidates(allCandidates).map(candidate => ({
+  const enrichedCandidates = addSmartDictionaryCandidates(allCandidates);
+  const candidates = mergePhotoCandidates(enrichedCandidates, 7).map(candidate => ({
     ...candidate,
     notes: images.length > 1
       ? `${candidate.notes} Учтено фото: ${images.length}.`
       : candidate.notes
   }));
 
-  updateRecognitionProgress(94, "Готовлю варианты", "Перевожу названия и сортирую результаты.");
+  updateRecognitionProgress(90, "Готовлю варианты", "Сверяю результат с русским словарём популярных продуктов.");
   return { candidates, provider: "food101" };
 }
 
-function mergePhotoCandidates(allCandidates) {
+function mergePhotoCandidates(allCandidates, limit = 5) {
   const byName = new Map();
 
   for (const candidate of allCandidates) {
@@ -871,7 +1073,7 @@ function mergePhotoCandidates(allCandidates) {
       return { ...candidate, confidence };
     })
     .sort((a, b) => Number(b.isFood) - Number(a.isFood) || b.confidence - a.confidence)
-    .slice(0, 5);
+    .slice(0, limit);
 }
 
 async function recognizeFoodWithMobileNet(imageDataUrls) {
@@ -911,13 +1113,37 @@ async function recognizeFoodWithMobileNet(imageDataUrls) {
   return { candidates, provider: "mobilenet" };
 }
 
+async function recognizeFoodWithHybridLocal(imageDataUrls) {
+  const images = asImageArray(imageDataUrls);
+  const food101Result = await recognizeFoodWithFood101(images);
+  let allCandidates = [...(food101Result.candidates || [])];
+
+  try {
+    updateRecognitionProgress(92, "Проверяю популярные продукты", "Дополняю Food-101 быстрым локальным распознаванием и словарём продуктов.");
+    const mobileNetResult = await recognizeFoodWithMobileNet(images);
+    allCandidates.push(...(mobileNetResult.candidates || []));
+  } catch (e) {
+    console.warn("MobileNet extra check failed", e);
+  }
+
+  const candidates = mergePhotoCandidates(addSmartDictionaryCandidates(allCandidates), 7).map(candidate => ({
+    ...candidate,
+    notes: candidate.source === "smart_dictionary"
+      ? candidate.notes
+      : `${candidate.notes || "Проверьте вариант перед сохранением."} Результат улучшен словарём популярных продуктов.`
+  }));
+
+  updateRecognitionProgress(97, "Собираю итог", "Показываю лучшие варианты из модели и словаря.");
+  return { candidates, provider: "hybrid" };
+}
+
 async function recognizeFoodLocally(imageDataUrls) {
   try {
-    return await recognizeFoodWithFood101(imageDataUrls);
+    return await recognizeFoodWithHybridLocal(imageDataUrls);
   } catch (e) {
-    console.warn("Food-101 local model failed, falling back to MobileNet", e);
+    console.warn("Hybrid local recognition failed, falling back to MobileNet", e);
     const fallback = await recognizeFoodWithMobileNet(imageDataUrls);
-    fallback.warning = `Food-101 не загрузилась: ${e.message}. Использую быстрый локальный режим.`;
+    fallback.warning = `Улучшенная локальная модель не загрузилась: ${e.message}. Использую быстрый локальный режим.`;
     return fallback;
   }
 }
@@ -1044,7 +1270,7 @@ function scrollRecognitionDialogTop() {
 async function rerunPhotoRecognition() {
   renderPhotoPreviews();
   const count = photoImageDataUrls.length;
-  const providerText = state.ai?.useOpenAI && state.ai?.openAiApiKey ? "через OpenAI" : "локально через Food-101";
+  const providerText = state.ai?.useOpenAI && state.ai?.openAiApiKey ? "через OpenAI" : "локально через Food-101 + словарь";
   $("recognitionStatus").textContent = `Распознаю ${providerText}. Фото: ${count}...`;
   $("recognitionList").innerHTML = "";
   setRecognitionLoader(true, "Распознаю продукт", count > 1 ? `Анализирую ${count} фото одного продукта.` : "Первый запуск может занять дольше из-за загрузки локальной модели еды.");
