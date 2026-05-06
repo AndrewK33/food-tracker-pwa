@@ -19,6 +19,10 @@ let photoCandidates = [];
 let photoImageDataUrls = [];
 let photoInputMode = "new";
 let localImageModel = null;
+let localFood101Classifier = null;
+let localFood101ModulePromise = null;
+let recognitionProgressValue = 0;
+let recognitionProgressTimer = null;
 let foodDialogBase100 = { kcal100: 0, protein100: 0, fat100: 0, carbs100: 0 };
 let foodDialogUpdating = false;
 
@@ -507,6 +511,111 @@ const LABEL_TRANSLATION_MAP = [
   ["dish", "блюдо"]
 ];
 
+
+const FOOD101_RU_MAP = {
+  apple_pie: "яблочный пирог",
+  baby_back_ribs: "свиные рёбрышки",
+  baklava: "пахлава",
+  beef_carpaccio: "карпаччо из говядины",
+  beef_tartare: "тартар из говядины",
+  beet_salad: "салат из свёклы",
+  beignets: "пончики бейнье",
+  bibimbap: "пибимпап",
+  bread_pudding: "хлебный пудинг",
+  breakfast_burrito: "буррито на завтрак",
+  bruschetta: "брускетта",
+  caesar_salad: "салат цезарь",
+  cannoli: "канноли",
+  caprese_salad: "салат капрезе",
+  carrot_cake: "морковный торт",
+  ceviche: "севиче",
+  cheesecake: "чизкейк",
+  cheese_plate: "сырная тарелка",
+  chicken_curry: "курица карри",
+  chicken_quesadilla: "кесадилья с курицей",
+  chicken_wings: "куриные крылышки",
+  chocolate_cake: "шоколадный торт",
+  chocolate_mousse: "шоколадный мусс",
+  churros: "чуррос",
+  clam_chowder: "клэм-чаудер",
+  club_sandwich: "клаб-сэндвич",
+  crab_cakes: "крабовые котлеты",
+  creme_brulee: "крем-брюле",
+  croque_madame: "крок-мадам",
+  cup_cakes: "капкейки",
+  deviled_eggs: "фаршированные яйца",
+  donuts: "пончики",
+  dumplings: "пельмени или дамплинги",
+  edamame: "эдамаме",
+  eggs_benedict: "яйца бенедикт",
+  escargots: "улитки эскарго",
+  falafel: "фалафель",
+  filet_mignon: "филе миньон",
+  fish_and_chips: "рыба с картофелем фри",
+  foie_gras: "фуа-гра",
+  french_fries: "картофель фри",
+  french_onion_soup: "французский луковый суп",
+  french_toast: "французский тост",
+  fried_calamari: "жареные кальмары",
+  fried_rice: "жареный рис",
+  frozen_yogurt: "замороженный йогурт",
+  garlic_bread: "чесночный хлеб",
+  gnocchi: "ньокки",
+  greek_salad: "греческий салат",
+  grilled_cheese_sandwich: "сэндвич с сыром",
+  grilled_salmon: "лосось на гриле",
+  guacamole: "гуакамоле",
+  gyoza: "гёдза",
+  hamburger: "бургер",
+  hot_and_sour_soup: "остро-кислый суп",
+  hot_dog: "хот-дог",
+  huevos_rancheros: "уэвос ранчерос",
+  hummus: "хумус",
+  ice_cream: "мороженое",
+  lasagna: "лазанья",
+  lobster_bisque: "суп из лобстера",
+  lobster_roll_sandwich: "сэндвич с лобстером",
+  macaroni_and_cheese: "макароны с сыром",
+  macarons: "макарон",
+  miso_soup: "мисо-суп",
+  mussels: "мидии",
+  nachos: "начос",
+  omelette: "омлет",
+  onion_rings: "луковые кольца",
+  oysters: "устрицы",
+  pad_thai: "пад-тай",
+  paella: "паэлья",
+  pancakes: "панкейки",
+  panna_cotta: "панна-котта",
+  peking_duck: "утка по-пекински",
+  pho: "фо",
+  pizza: "пицца",
+  pork_chop: "свиная отбивная",
+  poutine: "путин",
+  prime_rib: "стейк прайм-риб",
+  pulled_pork_sandwich: "сэндвич со свининой",
+  ramen: "рамен",
+  ravioli: "равиоли",
+  red_velvet_cake: "торт красный бархат",
+  risotto: "ризотто",
+  samosa: "самоса",
+  sashimi: "сашими",
+  scallops: "морские гребешки",
+  seaweed_salad: "салат из морских водорослей",
+  shrimp_and_grits: "креветки с кукурузной кашей",
+  spaghetti_bolognese: "спагетти болоньезе",
+  spaghetti_carbonara: "спагетти карбонара",
+  spring_rolls: "спринг-роллы",
+  steak: "стейк",
+  strawberry_shortcake: "клубничный торт",
+  sushi: "суши",
+  tacos: "тако",
+  takoyaki: "такояки",
+  tiramisu: "тирамису",
+  tuna_tartare: "тартар из тунца",
+  waffles: "вафли"
+};
+
 function containsCyrillic(text) {
   return /[А-Яа-яЁё]/.test(String(text || ""));
 }
@@ -585,6 +694,157 @@ function asImageArray(imageDataUrls) {
   return Array.isArray(imageDataUrls) ? imageDataUrls : [imageDataUrls];
 }
 
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function setRecognitionLoader(visible, title = "Распознаю продукт", hint = "") {
+  const loader = $("recognitionLoader");
+  if (!loader) return;
+  loader.hidden = !visible;
+  if (visible) {
+    recognitionProgressValue = 0;
+    $("recognitionLoaderBar").style.width = "0%";
+    $("recognitionLoaderPercent").textContent = "0%";
+    $("recognitionLoaderTitle").textContent = title;
+    $("recognitionLoaderHint").textContent = hint || "Первый запуск может занять дольше, потому что загружается локальная модель еды.";
+  }
+}
+
+function updateRecognitionProgress(percent, title = "", hint = "") {
+  const loader = $("recognitionLoader");
+  if (!loader) return;
+  const nextProgress = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+  recognitionProgressValue = Math.max(recognitionProgressValue, nextProgress);
+  loader.hidden = false;
+  $("recognitionLoaderBar").style.width = `${recognitionProgressValue}%`;
+  $("recognitionLoaderPercent").textContent = `${recognitionProgressValue}%`;
+  if (title) $("recognitionLoaderTitle").textContent = title;
+  if (hint) $("recognitionLoaderHint").textContent = hint;
+}
+
+function startSoftRecognitionProgress(start = 8, end = 88) {
+  clearInterval(recognitionProgressTimer);
+  updateRecognitionProgress(start);
+  recognitionProgressTimer = setInterval(() => {
+    const gap = end - recognitionProgressValue;
+    if (gap <= 1) return;
+    updateRecognitionProgress(recognitionProgressValue + Math.max(1, Math.round(gap * 0.08)));
+  }, 550);
+}
+
+function stopSoftRecognitionProgress() {
+  clearInterval(recognitionProgressTimer);
+  recognitionProgressTimer = null;
+}
+
+function hideRecognitionLoader() {
+  stopSoftRecognitionProgress();
+  const loader = $("recognitionLoader");
+  if (loader) loader.hidden = true;
+}
+
+function food101Key(label) {
+  return String(label || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/-+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+function mapFood101Label(label) {
+  const key = food101Key(label);
+  const name = FOOD101_RU_MAP[key] || translateLabelToRussian(String(label || "").replace(/_/g, " "));
+  return {
+    name,
+    normalizedName: name,
+    searchName: String(label || "").replace(/_/g, " ").trim(),
+    state: "dish",
+    isFood: true
+  };
+}
+
+async function loadTransformersModule() {
+  if (!localFood101ModulePromise) {
+    localFood101ModulePromise = import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2");
+  }
+  return localFood101ModulePromise;
+}
+
+function handleFood101Progress(data = {}) {
+  if (!$("recognitionLoader")) return;
+
+  if (data.status === "initiate") {
+    updateRecognitionProgress(Math.max(recognitionProgressValue, 12), "Загружаю модель еды", "Первый запуск загружает Food-101 модель. Потом браузер обычно берёт её из кэша.");
+  }
+
+  if (data.status === "download" || data.status === "progress") {
+    const loaded = Number(data.loaded || 0);
+    const total = Number(data.total || 0);
+    if (total > 0) {
+      const fileProgress = Math.min(1, loaded / total);
+      updateRecognitionProgress(15 + fileProgress * 50, "Загружаю модель еды", "Идёт загрузка локальной Food-101 модели для распознавания блюд.");
+    } else {
+      updateRecognitionProgress(Math.min(65, recognitionProgressValue + 1), "Загружаю модель еды");
+    }
+  }
+
+  if (data.status === "ready" || data.status === "done") {
+    updateRecognitionProgress(Math.max(recognitionProgressValue, 66), "Модель готова", "Анализирую фото на устройстве.");
+  }
+}
+
+async function loadFood101Classifier() {
+  if (localFood101Classifier) return localFood101Classifier;
+
+  const transformers = await loadTransformersModule();
+  if (transformers.env) {
+    transformers.env.allowLocalModels = false;
+    transformers.env.allowRemoteModels = true;
+  }
+
+  localFood101Classifier = await transformers.pipeline(
+    "image-classification",
+    "onnx-community/swin-finetuned-food101-ONNX",
+    { progress_callback: handleFood101Progress }
+  );
+
+  return localFood101Classifier;
+}
+
+async function recognizeFoodWithFood101(imageDataUrls) {
+  const images = asImageArray(imageDataUrls);
+  updateRecognitionProgress(10, "Готовлю локальную модель еды", "Используется открытая Food-101 модель. Фото остаётся на устройстве.");
+  const classifier = await loadFood101Classifier();
+
+  const allCandidates = [];
+  for (let i = 0; i < images.length; i++) {
+    updateRecognitionProgress(68 + (i / Math.max(1, images.length)) * 20, "Анализирую фото", `Фото ${i + 1} из ${images.length}.`);
+    const predictions = await classifier(images[i], { topk: 5 });
+    for (const prediction of predictions || []) {
+      const mapped = mapFood101Label(prediction.label);
+      allCandidates.push({
+        ...mapped,
+        confidence: Number(prediction.score || 0),
+        notes: "Улучшенная локальная Food-101 модель нашла похожее блюдо. Проверьте перед сохранением.",
+        source: "food101"
+      });
+    }
+  }
+
+  const candidates = mergePhotoCandidates(allCandidates).map(candidate => ({
+    ...candidate,
+    notes: images.length > 1
+      ? `${candidate.notes} Учтено фото: ${images.length}.`
+      : candidate.notes
+  }));
+
+  updateRecognitionProgress(94, "Готовлю варианты", "Перевожу названия и сортирую результаты.");
+  return { candidates, provider: "food101" };
+}
+
 function mergePhotoCandidates(allCandidates) {
   const byName = new Map();
 
@@ -614,7 +874,8 @@ function mergePhotoCandidates(allCandidates) {
     .slice(0, 5);
 }
 
-async function recognizeFoodLocally(imageDataUrls) {
+async function recognizeFoodWithMobileNet(imageDataUrls) {
+  updateRecognitionProgress(Math.max(recognitionProgressValue, 20), "Запускаю быстрый локальный режим", "Если Food-101 не загрузилась, приложение использует запасную модель MobileNet.");
   await loadScriptOnce("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
   await loadScriptOnce("https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1");
 
@@ -625,16 +886,17 @@ async function recognizeFoodLocally(imageDataUrls) {
   const images = asImageArray(imageDataUrls);
   const allCandidates = [];
 
-  for (const imageDataUrl of images) {
-    const img = await loadImage(imageDataUrl);
+  for (let i = 0; i < images.length; i++) {
+    updateRecognitionProgress(55 + (i / Math.max(1, images.length)) * 30, "Анализирую фото", `Быстрый режим: фото ${i + 1} из ${images.length}.`);
+    const img = await loadImage(images[i]);
     const predictions = await localImageModel.classify(img, 5);
     for (const p of predictions) {
       const mapped = mapImageLabel(p.className);
       allCandidates.push({
         ...mapped,
         confidence: Number(p.probability || 0),
-        notes: mapped.isFood ? "Локальная модель нашла похожий вариант. Проверьте перед сохранением." : "Локальная модель не уверена. Проверьте вручную.",
-        source: "local"
+        notes: mapped.isFood ? "Быстрая локальная модель нашла похожий вариант. Проверьте перед сохранением." : "Быстрая локальная модель не уверена. Проверьте вручную.",
+        source: "mobilenet"
       });
     }
   }
@@ -646,7 +908,18 @@ async function recognizeFoodLocally(imageDataUrls) {
       : candidate.notes
   }));
 
-  return { candidates, provider: "local" };
+  return { candidates, provider: "mobilenet" };
+}
+
+async function recognizeFoodLocally(imageDataUrls) {
+  try {
+    return await recognizeFoodWithFood101(imageDataUrls);
+  } catch (e) {
+    console.warn("Food-101 local model failed, falling back to MobileNet", e);
+    const fallback = await recognizeFoodWithMobileNet(imageDataUrls);
+    fallback.warning = `Food-101 не загрузилась: ${e.message}. Использую быстрый локальный режим.`;
+    return fallback;
+  }
 }
 
 async function recognizeFoodWithOpenAI(imageDataUrls) {
@@ -762,15 +1035,33 @@ function renderPhotoPreviews() {
   `).join("");
 }
 
+function scrollRecognitionDialogTop() {
+  const area = $("recognitionScrollArea");
+  if (!area) return;
+  area.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 async function rerunPhotoRecognition() {
   renderPhotoPreviews();
   const count = photoImageDataUrls.length;
-  const providerText = state.ai?.useOpenAI && state.ai?.openAiApiKey ? "через OpenAI" : "локально на устройстве";
+  const providerText = state.ai?.useOpenAI && state.ai?.openAiApiKey ? "через OpenAI" : "локально через Food-101";
   $("recognitionStatus").textContent = `Распознаю ${providerText}. Фото: ${count}...`;
   $("recognitionList").innerHTML = "";
+  setRecognitionLoader(true, "Распознаю продукт", count > 1 ? `Анализирую ${count} фото одного продукта.` : "Первый запуск может занять дольше из-за загрузки локальной модели еды.");
+  startSoftRecognitionProgress(7, 88);
 
-  const result = await recognizeFoodPhoto(photoImageDataUrls);
-  renderRecognitionCandidates(result.candidates || [], result.warning || "");
+  try {
+    const result = await recognizeFoodPhoto(photoImageDataUrls);
+    stopSoftRecognitionProgress();
+    updateRecognitionProgress(100, "Готово", "Показываю варианты распознавания.");
+    await sleep(180);
+    hideRecognitionLoader();
+    renderRecognitionCandidates(result.candidates || [], result.warning || "");
+  } catch (e) {
+    stopSoftRecognitionProgress();
+    hideRecognitionLoader();
+    throw e;
+  }
 }
 
 async function handlePhotoSelected(event) {
@@ -779,6 +1070,7 @@ async function handlePhotoSelected(event) {
 
   try {
     if (!$('recognitionDialog').open) $("recognitionDialog").showModal();
+    scrollRecognitionDialogTop();
 
     if (photoInputMode === "new") {
       photoImageDataUrls = [];
@@ -808,6 +1100,7 @@ function renderRecognitionCandidates(candidates, warning = "") {
   photoCandidates = candidates;
 
   if (!candidates.length) {
+    hideRecognitionLoader();
     $("recognitionStatus").textContent = warning || "Не удалось определить продукт. Введите вручную.";
     $("recognitionList").innerHTML = "";
     return;
@@ -825,6 +1118,7 @@ function renderRecognitionCandidates(candidates, warning = "") {
       </div>
     </div>
   `).join("");
+  scrollRecognitionDialogTop();
 }
 
 function stateLabel(state) {
@@ -908,6 +1202,7 @@ async function selectRecognizedFood(index) {
 }
 
 function resetPhotoRecognitionState() {
+  hideRecognitionLoader();
   photoCandidates = [];
   photoImageDataUrls = [];
   photoInputMode = "new";
