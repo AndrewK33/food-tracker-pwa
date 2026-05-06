@@ -24,7 +24,7 @@
       </div>
     </header>
 
-    <section class="card">
+    <section id="calorieCard" class="card tappable" tabindex="0" role="button" aria-label="Открыть график калорий и БЖУ">
       <div class="row between">
         <div>
           <div class="muted">Калории</div>
@@ -33,6 +33,7 @@
         <div id="calorieStatus" class="pill">Осталось 2200</div>
       </div>
       <div class="progress"><div id="calorieProgress"></div></div>
+      <p class="muted compact">Нажмите на карточку, чтобы открыть график по дням</p>
     </section>
 
     <section class="grid3">
@@ -50,7 +51,7 @@
       <input id="photoInput" type="file" accept="image/*" capture="environment" hidden />
     </section>
 
-    <section class="card">
+    <section id="diaryTab" class="card" tabindex="-1">
       <div class="row between">
         <h2>Сегодня</h2>
         <input id="datePicker" type="date" />
@@ -63,14 +64,15 @@
       <button data-tab="history">История</button>
       <button data-tab="weight">Вес</button>
       <button data-tab="export">Данные</button>
+      <button data-tab="analytics">График</button>
     </nav>
 
-    <section id="historyTab" class="card hidden">
+    <section id="historyTab" class="card hidden" tabindex="-1">
       <h2>История по дням</h2>
       <div id="historyList" class="list"></div>
     </section>
 
-    <section id="weightTab" class="card hidden">
+    <section id="weightTab" class="card hidden" tabindex="-1">
       <h2>Вес и талия</h2>
       <div class="formgrid">
         <label>Вес, кг<input id="weightInput" type="number" step="0.1" placeholder="98.0"></label>
@@ -80,12 +82,23 @@
       <div id="bodyList" class="list"></div>
     </section>
 
-    <section id="exportTab" class="card hidden">
+    <section id="exportTab" class="card hidden" tabindex="-1">
       <h2>Данные</h2>
       <p class="muted">Все записи хранятся в памяти браузера на телефоне. Можно экспортировать резервную копию в JSON.</p>
       <button id="exportBtn">⬇️ Экспорт JSON</button>
       <label class="fileLabel">⬆️ Импорт JSON<input id="importFile" type="file" accept="application/json"></label>
       <button id="clearBtn" class="danger">Удалить все данные</button>
+    </section>
+
+    <section id="analyticsTab" class="card hidden" tabindex="-1">
+      <div class="row between">
+        <h2>График калорий и БЖУ</h2>
+        <button id="analyticsTodayBtn" type="button">Сегодня</button>
+      </div>
+      <p class="muted compact">Последние 14 дней относительно выбранной даты. Зелёный — цель по калориям выполнена, красный — превышение.</p>
+      <div id="calorieChart" class="chartBox"></div>
+      <div id="macroChart" class="chartBox"></div>
+      <div id="analyticsSummary" class="list"></div>
     </section>
   </div>
 
@@ -136,12 +149,13 @@
 
       <div class="formgrid">
         <label>Порция, г<input id="gramsInput" type="number" step="1" min="1" value="100" required></label>
-        <label>Ккал / 100 г<input id="kcalInput" type="number" step="0.1" min="0" required></label>
-        <label>Белки / 100 г<input id="proteinInput" type="number" step="0.1" min="0" required></label>
-        <label>Жиры / 100 г<input id="fatInput" type="number" step="0.1" min="0" required></label>
-        <label>Углеводы / 100 г<input id="carbsInput" type="number" step="0.1" min="0" required></label>
+        <label>Ккал в порции<input id="kcalInput" type="number" step="0.1" min="0" required></label>
+        <label>Белки в порции, г<input id="proteinInput" type="number" step="0.1" min="0" required></label>
+        <label>Жиры в порции, г<input id="fatInput" type="number" step="0.1" min="0" required></label>
+        <label>Углеводы в порции, г<input id="carbsInput" type="number" step="0.1" min="0" required></label>
       </div>
 
+      <p id="portionInfo" class="muted compact">КБЖУ показаны для указанной порции. При изменении веса значения пересчитаются автоматически.</p>
       <p id="sourceInfo" class="muted"></p>
 
       <div class="row between">
