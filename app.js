@@ -10,11 +10,6 @@ const defaultState = {
     openAiApiKey: "",
     openAiModel: "gpt-4.1-mini"
   },
-  ai: {
-    useOpenAI: false,
-    openAiApiKey: "",
-    openAiModel: "gpt-4.1-mini"
-  },
   selectedDate: new Date().toISOString().slice(0,10)
 };
 
@@ -27,13 +22,6 @@ let localImageModel = null;
 
 function loadState() {
   try {
-    const loaded = JSON.parse(localStorage.getItem(LS_KEY)) || {};
-    return {
-      ...structuredClone(defaultState),
-      ...loaded,
-      goals: { ...defaultState.goals, ...(loaded.goals || {}) },
-      ai: { ...defaultState.ai, ...(loaded.ai || {}) }
-    };
     const loaded = JSON.parse(localStorage.getItem(LS_KEY)) || {};
     return {
       ...structuredClone(defaultState),
@@ -1031,52 +1019,6 @@ $("toggleAiKeyBtn").addEventListener("click", () => {
   button.textContent = shouldShow ? "Скрыть" : "Показать";
 });
 
-function closeDialogIfOpen(id) {
-  const dialog = $(id);
-  if (dialog?.open) dialog.close();
-}
-
-function openApiKeyHelp() {
-  closeDialogIfOpen("helpMenuDialog");
-  $("apiKeyHelpDialog").showModal();
-}
-
-function openPhotoHelp() {
-  closeDialogIfOpen("helpMenuDialog");
-  $("photoHelpDialog").showModal();
-}
-
-function openSettingsAndFocusApiKey() {
-  closeDialogIfOpen("apiKeyHelpDialog");
-  if (!$('settingsDialog').open) {
-    $("settingsBtn").click();
-  }
-  setTimeout(() => $("openAiKeyInput")?.focus(), 80);
-}
-
-function openExternalUrl(url) {
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-
-$("helpBtn").addEventListener("click", () => $("helpMenuDialog").showModal());
-$("closeHelpMenu").addEventListener("click", () => $("helpMenuDialog").close());
-$("apiKeyHelpFromMenu").addEventListener("click", openApiKeyHelp);
-$("photoHelpFromMenu").addEventListener("click", openPhotoHelp);
-$("apiKeyHelpBtn").addEventListener("click", openApiKeyHelp);
-$("apiKeyHelpInlineBtn").addEventListener("click", openApiKeyHelp);
-$("closeApiKeyHelp").addEventListener("click", () => $("apiKeyHelpDialog").close());
-$("closeApiKeyHelpBottom").addEventListener("click", () => $("apiKeyHelpDialog").close());
-$("goToKeySettingsBtn").addEventListener("click", openSettingsAndFocusApiKey);
-$("openApiKeysBtn").addEventListener("click", () => openExternalUrl("https://platform.openai.com/api-keys"));
-$("closePhotoHelp").addEventListener("click", () => $("photoHelpDialog").close());
-$("toggleAiKeyBtn").addEventListener("click", () => {
-  const input = $("openAiKeyInput");
-  const button = $("toggleAiKeyBtn");
-  const shouldShow = input.type === "password";
-  input.type = shouldShow ? "text" : "password";
-  button.textContent = shouldShow ? "Скрыть" : "Показать";
-});
-
 $("scanBtn").addEventListener("click", openScanner);
 $("photoBtn").addEventListener("click", () => openPhotoPicker("new"));
 $("photoInput").addEventListener("change", handlePhotoSelected);
@@ -1105,9 +1047,6 @@ $("settingsBtn").addEventListener("click", () => {
   $("useOpenAiInput").checked = Boolean(state.ai?.useOpenAI);
   $("openAiKeyInput").value = state.ai?.openAiApiKey || "";
   $("openAiModelInput").value = state.ai?.openAiModel || "gpt-4.1-mini";
-  $("useOpenAiInput").checked = Boolean(state.ai?.useOpenAI);
-  $("openAiKeyInput").value = state.ai?.openAiApiKey || "";
-  $("openAiModelInput").value = state.ai?.openAiModel || "gpt-4.1-mini";
   $("settingsDialog").showModal();
 });
 $("settingsForm").addEventListener("submit", e => {
@@ -1117,11 +1056,6 @@ $("settingsForm").addEventListener("submit", e => {
     protein: Number($("goalProteinInput").value),
     fat: Number($("goalFatInput").value),
     carbs: Number($("goalCarbsInput").value)
-  };
-  state.ai = {
-    useOpenAI: $("useOpenAiInput").checked,
-    openAiApiKey: $("openAiKeyInput").value.trim(),
-    openAiModel: $("openAiModelInput").value.trim() || "gpt-4.1-mini"
   };
   state.ai = {
     useOpenAI: $("useOpenAiInput").checked,
@@ -1139,12 +1073,7 @@ $("clearAiKeyBtn").addEventListener("click", () => {
   alert("API-ключ удалён с этого устройства");
 });
 
-$("clearAiKeyBtn").addEventListener("click", () => {
-  state.ai.openAiApiKey = "";
-  $("openAiKeyInput").value = "";
-  saveState();
-  alert("API-ключ удалён с этого устройства");
-});
+
 
 $("saveBodyBtn").addEventListener("click", saveBody);
 $("exportBtn").addEventListener("click", exportJson);
