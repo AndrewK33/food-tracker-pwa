@@ -5,15 +5,30 @@ const defaultState = {
   entries: [],
   favorites: [],
   body: [],
+  ai: {
+    useOpenAI: false,
+    openAiApiKey: "",
+    openAiModel: "gpt-4.1-mini"
+  },
   selectedDate: new Date().toISOString().slice(0,10)
 };
 
 let state = loadState();
 let scannerControls = null;
+let photoCandidates = [];
+let photoImageDataUrls = [];
+let photoInputMode = "new";
+let localImageModel = null;
 
 function loadState() {
   try {
-    return { ...defaultState, ...(JSON.parse(localStorage.getItem(LS_KEY)) || {}) };
+    const loaded = JSON.parse(localStorage.getItem(LS_KEY)) || {};
+    return {
+      ...structuredClone(defaultState),
+      ...loaded,
+      goals: { ...defaultState.goals, ...(loaded.goals || {}) },
+      ai: { ...defaultState.ai, ...(loaded.ai || {}) }
+    };
   } catch {
     return structuredClone(defaultState);
   }
@@ -160,6 +175,621 @@ async function fetchOpenFoodFacts(barcode) {
     meal: "Перекус",
     source: "Источник: Open Food Facts"
   };
+}
+
+
+async function fetchOpenFoodFactsByName(searchTerm) {
+  const fields = "product_name,nutriments,brands,code";
+  const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(searchTerm)}&fields=${fields}&page_size=10`;
+  const res = await fetch(url, { headers: { "Accept": "application/json" }});
+  if (!res.ok) throw new Error("Ошибка поиска Open Food Facts");
+  const data = await res.json();
+  const products = data.products || [];
+
+  for (const p of products) {
+    const n = p.nutriments || {};
+    const kcal = n["energy-kcal_100g"];
+    const protein = n["proteins_100g"];
+    const fat = n["fat_100g"];
+    const carbs = n["carbohydrates_100g"];
+
+    if ([kcal, protein, fat, carbs].every(v => v !== undefined && v !== null && !Number.isNaN(Number(v)))) {
+      return {
+        id: uid(),
+        date: state.selectedDate,
+        barcode: p.code || "",
+        name: p.product_name || searchTerm,
+        grams: 100,
+        kcal100: Number(kcal),
+        protein100: Number(protein),
+        fat100: Number(fat),
+        carbs100: Number(carbs),
+        meal: "Перекус",
+        source: `Источник: Open Food Facts, поиск по названию «${searchTerm}»`
+      };
+    }
+  }
+
+  throw new Error("БЖУ не найдено в Open Food Facts");
+}
+
+function resizeImageToDataUrl(file, maxSize = 1024, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      const scale = Math.min(1, maxSize / Math.max(width, height));
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+
+    img.onerror = () => reject(new Error("Не удалось прочитать изображение"));
+    img.src = url;
+  });
+}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Не удалось загрузить изображение"));
+    img.src = dataUrl;
+  });
+}
+
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) return resolve();
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Не удалось загрузить ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+const FOOD_LABEL_MAP = [
+  { keys: ["banana"], name: "банан", state: "raw", searchName: "banana" },
+  { keys: ["apple", "granny smith"], name: "яблоко", state: "raw", searchName: "apple" },
+  { keys: ["pear"], name: "груша", state: "raw", searchName: "pear" },
+  { keys: ["orange"], name: "апельсин", state: "raw", searchName: "orange" },
+  { keys: ["lemon"], name: "лимон", state: "raw", searchName: "lemon" },
+  { keys: ["pineapple"], name: "ананас", state: "raw", searchName: "pineapple" },
+  { keys: ["strawberry"], name: "клубника", state: "raw", searchName: "strawberry" },
+  { keys: ["fig"], name: "инжир", state: "raw", searchName: "fig" },
+  { keys: ["pomegranate"], name: "гранат", state: "raw", searchName: "pomegranate" },
+  { keys: ["cucumber"], name: "огурец", state: "raw", searchName: "cucumber" },
+  { keys: ["zucchini", "courgette"], name: "кабачок", state: "raw", searchName: "zucchini" },
+  { keys: ["bell pepper"], name: "сладкий перец", state: "raw", searchName: "bell pepper" },
+  { keys: ["broccoli"], name: "брокколи", state: "raw", searchName: "broccoli" },
+  { keys: ["cauliflower"], name: "цветная капуста", state: "raw", searchName: "cauliflower" },
+  { keys: ["artichoke"], name: "артишок", state: "raw", searchName: "artichoke" },
+  { keys: ["cabbage"], name: "капуста", state: "raw", searchName: "cabbage" },
+  { keys: ["carrot"], name: "морковь", state: "raw", searchName: "carrot" },
+  { keys: ["mushroom"], name: "грибы", state: "raw", searchName: "mushroom" },
+  { keys: ["egg"], name: "яйцо", state: "raw", searchName: "egg" },
+  { keys: ["omelet", "omelette"], name: "омлет", state: "dish", searchName: "omelet" },
+  { keys: ["salad"], name: "салат", state: "dish", searchName: "salad" },
+  { keys: ["spaghetti", "carbonara", "noodle"], name: "паста", state: "cooked", searchName: "spaghetti" },
+  { keys: ["pizza"], name: "пицца", state: "dish", searchName: "pizza" },
+  { keys: ["cheeseburger", "hamburger"], name: "бургер", state: "dish", searchName: "burger" },
+  { keys: ["hotdog", "hot dog"], name: "хот-дог", state: "dish", searchName: "hot dog" },
+  { keys: ["burrito"], name: "буррито", state: "dish", searchName: "burrito" },
+  { keys: ["taco"], name: "тако", state: "dish", searchName: "taco" },
+  { keys: ["guacamole"], name: "гуакамоле", state: "dish", searchName: "guacamole" },
+  { keys: ["ice cream"], name: "мороженое", state: "dish", searchName: "ice cream" },
+  { keys: ["bagel"], name: "бейгл", state: "baked", searchName: "bagel" },
+  { keys: ["pretzel"], name: "крендель", state: "baked", searchName: "pretzel" },
+  { keys: ["baguette", "french loaf", "loaf"], name: "хлеб", state: "baked", searchName: "bread" },
+  { keys: ["croissant"], name: "круассан", state: "baked", searchName: "croissant" },
+  { keys: ["coffee", "espresso"], name: "кофе", state: "dish", searchName: "coffee" },
+  { keys: ["tea"], name: "чай", state: "dish", searchName: "tea" },
+  { keys: ["soup", "consomme"], name: "суп", state: "dish", searchName: "soup" },
+  { keys: ["sushi"], name: "суши", state: "dish", searchName: "sushi" },
+  { keys: ["rice"], name: "рис", state: "cooked", searchName: "rice" },
+  { keys: ["meat loaf"], name: "мясной рулет", state: "dish", searchName: "meat loaf" },
+  { keys: ["potpie", "pot pie"], name: "пирог", state: "baked", searchName: "pot pie" }
+];
+
+const LABEL_TRANSLATION_MAP = [
+  ["granny smith", "яблоко"],
+  ["bell pepper", "сладкий перец"],
+  ["hot dog", "хот-дог"],
+  ["ice cream", "мороженое"],
+  ["french loaf", "хлеб"],
+  ["meat loaf", "мясной рулет"],
+  ["pot pie", "пирог"],
+  ["potpie", "пирог"],
+  ["omelette", "омлет"],
+  ["omelet", "омлет"],
+  ["spaghetti", "паста"],
+  ["noodle", "лапша"],
+  ["zucchini", "кабачок"],
+  ["courgette", "кабачок"],
+  ["strawberry", "клубника"],
+  ["pineapple", "ананас"],
+  ["pomegranate", "гранат"],
+  ["cauliflower", "цветная капуста"],
+  ["broccoli", "брокколи"],
+  ["cucumber", "огурец"],
+  ["carrot", "морковь"],
+  ["cabbage", "капуста"],
+  ["mushroom", "грибы"],
+  ["artichoke", "артишок"],
+  ["banana", "банан"],
+  ["apple", "яблоко"],
+  ["pear", "груша"],
+  ["orange", "апельсин"],
+  ["lemon", "лимон"],
+  ["fig", "инжир"],
+  ["pizza", "пицца"],
+  ["cheeseburger", "чизбургер"],
+  ["hamburger", "бургер"],
+  ["burrito", "буррито"],
+  ["taco", "тако"],
+  ["guacamole", "гуакамоле"],
+  ["bagel", "бейгл"],
+  ["pretzel", "крендель"],
+  ["croissant", "круассан"],
+  ["coffee", "кофе"],
+  ["espresso", "эспрессо"],
+  ["tea", "чай"],
+  ["soup", "суп"],
+  ["consomme", "суп"],
+  ["sushi", "суши"],
+  ["rice", "рис"],
+  ["egg", "яйцо"],
+  ["salad", "салат"],
+  ["bread", "хлеб"],
+  ["loaf", "хлеб"],
+  ["plate", "тарелка"],
+  ["dish", "блюдо"]
+];
+
+function containsCyrillic(text) {
+  return /[А-Яа-яЁё]/.test(String(text || ""));
+}
+
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function translateLabelToRussian(label) {
+  const lower = String(label || "").toLowerCase().trim();
+  if (!lower) return "неизвестный продукт";
+  if (containsCyrillic(lower)) return lower;
+
+  let translated = lower;
+  for (const [en, ru] of [...LABEL_TRANSLATION_MAP].sort((a, b) => b[0].length - a[0].length)) {
+    translated = translated.replace(new RegExp(escapeRegExp(en), "g"), ru);
+  }
+
+  const cleanedParts = translated
+    .split(/\s*,\s*/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => /[a-z]/i.test(part) ? "" : part)
+    .filter(Boolean);
+
+  const unique = [...new Set(cleanedParts)];
+  return unique.length ? unique.join(" / ") : "неизвестный продукт";
+}
+
+function mapImageLabel(label) {
+  const lower = String(label || "").toLowerCase();
+  const match = FOOD_LABEL_MAP.find(x => x.keys.some(k => lower.includes(k)));
+  if (match) {
+    return {
+      name: match.name,
+      normalizedName: match.name,
+      searchName: match.searchName || match.keys[0],
+      state: match.state,
+      isFood: true
+    };
+  }
+
+  const translated = translateLabelToRussian(label);
+  return {
+    name: translated,
+    normalizedName: translated,
+    searchName: label || "",
+    state: "unknown",
+    isFood: translated !== "неизвестный продукт"
+  };
+}
+
+function russianizeCandidate(candidate = {}) {
+  const currentName = String(candidate.normalizedName || candidate.name || "").trim();
+  if (containsCyrillic(currentName)) {
+    return {
+      ...candidate,
+      name: currentName,
+      normalizedName: currentName,
+      searchName: candidate.searchName || currentName,
+      isFood: true
+    };
+  }
+
+  const mapped = mapImageLabel(currentName);
+  return {
+    ...candidate,
+    name: mapped.name,
+    normalizedName: mapped.normalizedName,
+    searchName: candidate.searchName || mapped.searchName || currentName,
+    isFood: mapped.isFood || candidate.state !== "unknown"
+  };
+}
+
+function asImageArray(imageDataUrls) {
+  return Array.isArray(imageDataUrls) ? imageDataUrls : [imageDataUrls];
+}
+
+function mergePhotoCandidates(allCandidates) {
+  const byName = new Map();
+
+  for (const candidate of allCandidates) {
+    const key = normalizeFoodName(candidate.normalizedName || candidate.name);
+    if (!key) continue;
+
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, { ...candidate, seenCount: 1, bestConfidence: candidate.confidence || 0 });
+      continue;
+    }
+
+    existing.seenCount += 1;
+    existing.bestConfidence = Math.max(existing.bestConfidence || 0, candidate.confidence || 0);
+    existing.confidence = Math.max(existing.confidence || 0, candidate.confidence || 0);
+    existing.isFood = existing.isFood || candidate.isFood;
+  }
+
+  return [...byName.values()]
+    .map(candidate => {
+      const boost = candidate.seenCount > 1 ? Math.min(0.12, 0.06 * (candidate.seenCount - 1)) : 0;
+      const confidence = Math.min(0.99, (candidate.bestConfidence || candidate.confidence || 0) + boost);
+      return { ...candidate, confidence };
+    })
+    .sort((a, b) => Number(b.isFood) - Number(a.isFood) || b.confidence - a.confidence)
+    .slice(0, 5);
+}
+
+async function recognizeFoodLocally(imageDataUrls) {
+  await loadScriptOnce("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
+  await loadScriptOnce("https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1");
+
+  if (!localImageModel) {
+    localImageModel = await mobilenet.load({ version: 2, alpha: 0.5 });
+  }
+
+  const images = asImageArray(imageDataUrls);
+  const allCandidates = [];
+
+  for (const imageDataUrl of images) {
+    const img = await loadImage(imageDataUrl);
+    const predictions = await localImageModel.classify(img, 5);
+    for (const p of predictions) {
+      const mapped = mapImageLabel(p.className);
+      allCandidates.push({
+        ...mapped,
+        confidence: Number(p.probability || 0),
+        notes: mapped.isFood ? "Локальная модель нашла похожий вариант. Проверьте перед сохранением." : "Локальная модель не уверена. Проверьте вручную.",
+        source: "local"
+      });
+    }
+  }
+
+  const candidates = mergePhotoCandidates(allCandidates).map(candidate => ({
+    ...candidate,
+    notes: images.length > 1
+      ? `${candidate.notes} Учтено фото: ${images.length}.`
+      : candidate.notes
+  }));
+
+  return { candidates, provider: "local" };
+}
+
+async function recognizeFoodWithOpenAI(imageDataUrls) {
+  const apiKey = state.ai?.openAiApiKey?.trim();
+  if (!apiKey) throw new Error("OpenAI API-ключ не указан");
+
+  const images = asImageArray(imageDataUrls);
+
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      candidates: {
+        type: "array",
+        minItems: 0,
+        maxItems: 5,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            name: { type: "string" },
+            normalizedName: { type: "string" },
+            state: { type: "string", enum: ["raw", "cooked", "fried", "baked", "packaged", "dish", "unknown"] },
+            confidence: { type: "number", minimum: 0, maximum: 1 },
+            notes: { type: "string" }
+          },
+          required: ["name", "normalizedName", "state", "confidence", "notes"]
+        }
+      }
+    },
+    required: ["candidates"]
+  };
+
+  const res = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: state.ai?.openAiModel?.trim() || "gpt-4.1-mini",
+      input: [{
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: `Определи еду или продукт на фото. Если фото несколько, считай, что это один и тот же продукт/блюдо с разных ракурсов. Не рассчитывай КБЖУ. Верни 1-5 кандидатов. Если это готовое блюдо, укажи state=dish. Если не уверен, снизь confidence. Названия обязательно верни на русском. Фото: ${images.length}.`
+          },
+          ...images.map(imageDataUrl => ({ type: "input_image", image_url: imageDataUrl, detail: "low" }))
+        ]
+      }],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "food_photo_recognition",
+          strict: true,
+          schema
+        }
+      }
+    })
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(data?.error?.message || "OpenAI не смог распознать фото");
+  }
+
+  const outputText = data.output_text || (data.output || [])
+    .flatMap(x => x.content || [])
+    .map(x => x.text || "")
+    .find(Boolean);
+
+  if (!outputText) throw new Error("OpenAI вернул пустой ответ");
+  const parsed = JSON.parse(outputText);
+  return {
+    candidates: (parsed.candidates || []).map(c => russianizeCandidate({ ...c, source: "openai", isFood: true })),
+    provider: "openai"
+  };
+}
+
+async function recognizeFoodPhoto(imageDataUrls) {
+  if (state.ai?.useOpenAI && state.ai?.openAiApiKey?.trim()) {
+    try {
+      return await recognizeFoodWithOpenAI(imageDataUrls);
+    } catch (e) {
+      const localResult = await recognizeFoodLocally(imageDataUrls);
+      localResult.warning = `OpenAI недоступен: ${e.message}. Использую локальную модель.`;
+      return localResult;
+    }
+  }
+  return recognizeFoodLocally(imageDataUrls);
+}
+
+function openPhotoPicker(mode = "new") {
+  photoInputMode = mode;
+  $("photoInput").click();
+}
+
+function renderPhotoPreviews() {
+  const box = $("recognitionPreviews");
+  if (!photoImageDataUrls.length) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+
+  box.hidden = false;
+  box.innerHTML = photoImageDataUrls.map((src, index) => `
+    <div class="photoThumb">
+      <img src="${src}" alt="Фото ${index + 1}">
+      <span>${index + 1}</span>
+    </div>
+  `).join("");
+}
+
+async function rerunPhotoRecognition() {
+  renderPhotoPreviews();
+  const count = photoImageDataUrls.length;
+  const providerText = state.ai?.useOpenAI && state.ai?.openAiApiKey ? "через OpenAI" : "локально на устройстве";
+  $("recognitionStatus").textContent = `Распознаю ${providerText}. Фото: ${count}...`;
+  $("recognitionList").innerHTML = "";
+
+  const result = await recognizeFoodPhoto(photoImageDataUrls);
+  renderRecognitionCandidates(result.candidates || [], result.warning || "");
+}
+
+async function handlePhotoSelected(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    if (!$('recognitionDialog').open) $("recognitionDialog").showModal();
+
+    if (photoInputMode === "new") {
+      photoImageDataUrls = [];
+      photoCandidates = [];
+    }
+
+    if (photoInputMode === "add" && photoImageDataUrls.length >= 3) {
+      $("recognitionStatus").textContent = "Для простоты можно добавить до 3 фото. Этого обычно достаточно.";
+      return;
+    }
+
+    $("recognitionStatus").textContent = photoInputMode === "add" ? "Добавляю фото..." : "Готовлю фото...";
+    $("recognitionList").innerHTML = "";
+
+    const imageDataUrl = await resizeImageToDataUrl(file);
+    photoImageDataUrls.push(imageDataUrl);
+    await rerunPhotoRecognition();
+  } catch (e) {
+    $("recognitionStatus").textContent = e.message || "Не удалось распознать фото";
+    $("recognitionList").innerHTML = "";
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function renderRecognitionCandidates(candidates, warning = "") {
+  photoCandidates = candidates;
+
+  if (!candidates.length) {
+    $("recognitionStatus").textContent = warning || "Не удалось определить продукт. Введите вручную.";
+    $("recognitionList").innerHTML = "";
+    return;
+  }
+
+  const photoCountText = photoImageDataUrls.length > 1 ? ` Учтено фото: ${photoImageDataUrls.length}.` : "";
+  $("recognitionStatus").textContent = warning || `Все варианты показаны по-русски.${photoCountText} Проверьте вариант, затем укажите вес.`;
+  $("recognitionList").innerHTML = candidates.map((c, i) => `
+    <div class="item">
+      <div class="title">${escapeHtml(c.name)}</div>
+      <div class="meta">${stateLabel(c.state)} · уверенность ${Math.round((c.confidence || 0) * 100)}%</div>
+      <div class="meta">${escapeHtml(c.notes || "Проверьте перед сохранением")}</div>
+      <div class="itemActions">
+        <button onclick="selectRecognizedFood(${i})">Выбрать</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function stateLabel(state) {
+  return ({
+    raw: "сырой продукт",
+    cooked: "готовый продукт",
+    fried: "жареное",
+    baked: "выпечка",
+    packaged: "упаковка",
+    dish: "готовое блюдо",
+    unknown: "не определено"
+  })[state] || "не определено";
+}
+
+function normalizeFoodName(s) {
+  return String(s || "").trim().toLowerCase();
+}
+
+async function findNutritionForRecognizedFood(candidate) {
+  const normalized = normalizeFoodName(candidate.normalizedName || candidate.name);
+  const favorite = state.favorites.find(f => {
+    const fav = normalizeFoodName(f.name);
+    return fav && normalized && (fav.includes(normalized) || normalized.includes(fav));
+  });
+
+  if (favorite) {
+    return {
+      ...favorite,
+      id: uid(),
+      date: state.selectedDate,
+      grams: favorite.grams || 100,
+      source: `Источник: избранное, продукт выбран по фото (${Math.round((candidate.confidence || 0) * 100)}%)`
+    };
+  }
+
+  const queries = [candidate.normalizedName || candidate.name, candidate.searchName]
+    .map(x => String(x || "").trim())
+    .filter(Boolean)
+    .filter((value, index, arr) => arr.indexOf(value) === index);
+
+  let lastError = null;
+  for (const query of queries) {
+    try {
+      return await fetchOpenFoodFactsByName(query);
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  throw lastError || new Error("БЖУ не найдено");
+}
+
+async function selectRecognizedFood(index) {
+  const candidate = photoCandidates[index];
+  if (!candidate) return;
+
+  $("recognitionStatus").textContent = "Ищу КБЖУ по названию...";
+  $("recognitionList").innerHTML = "";
+
+  try {
+    const product = await findNutritionForRecognizedFood(candidate);
+    product.source = `${product.source}; распознано по фото: ${candidate.name}`;
+    $("recognitionDialog").close();
+    openFoodDialog(product);
+  } catch (e) {
+    $("recognitionDialog").close();
+    openFoodDialog({
+      id: uid(),
+      date: state.selectedDate,
+      barcode: "",
+      name: candidate.normalizedName || candidate.name || "",
+      grams: 100,
+      kcal100: 0,
+      protein100: 0,
+      fat100: 0,
+      carbs100: 0,
+      meal: "Перекус",
+      source: `Распознано по фото: ${candidate.name}. ${e.message}. Введите КБЖУ вручную.`
+    });
+  }
+}
+
+function resetPhotoRecognitionState() {
+  photoCandidates = [];
+  photoImageDataUrls = [];
+  photoInputMode = "new";
+  renderPhotoPreviews();
+  $("recognitionList").innerHTML = "";
+}
+
+function closeRecognitionDialog() {
+  $("recognitionDialog").close();
+  resetPhotoRecognitionState();
+}
+
+function openManualFromRecognition() {
+  $("recognitionDialog").close();
+  resetPhotoRecognitionState();
+  openFoodDialog();
+}
+
+function retakeRecognitionPhoto() {
+  $("recognitionStatus").textContent = "Сделайте новое фото. Старый результат заменится после выбора снимка.";
+  openPhotoPicker("new");
+}
+
+function addRecognitionPhoto() {
+  if (photoImageDataUrls.length >= 3) {
+    $("recognitionStatus").textContent = "Можно добавить до 3 фото. Лучше выбрать самый понятный результат или сделать новое фото.";
+    return;
+  }
+  $("recognitionStatus").textContent = "Добавьте фото с другого ракурса: сверху, ближе или при лучшем свете.";
+  openPhotoPicker("add");
 }
 
 async function openScanner() {
@@ -343,7 +973,60 @@ function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
 }
 
+function closeDialogIfOpen(id) {
+  const dialog = $(id);
+  if (dialog?.open) dialog.close();
+}
+
+function openApiKeyHelp() {
+  closeDialogIfOpen("helpMenuDialog");
+  $("apiKeyHelpDialog").showModal();
+}
+
+function openPhotoHelp() {
+  closeDialogIfOpen("helpMenuDialog");
+  $("photoHelpDialog").showModal();
+}
+
+function openSettingsAndFocusApiKey() {
+  closeDialogIfOpen("apiKeyHelpDialog");
+  if (!$('settingsDialog').open) {
+    $("settingsBtn").click();
+  }
+  setTimeout(() => $("openAiKeyInput")?.focus(), 80);
+}
+
+function openExternalUrl(url) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+$("helpBtn").addEventListener("click", () => $("helpMenuDialog").showModal());
+$("closeHelpMenu").addEventListener("click", () => $("helpMenuDialog").close());
+$("apiKeyHelpFromMenu").addEventListener("click", openApiKeyHelp);
+$("photoHelpFromMenu").addEventListener("click", openPhotoHelp);
+$("apiKeyHelpBtn").addEventListener("click", openApiKeyHelp);
+$("apiKeyHelpInlineBtn").addEventListener("click", openApiKeyHelp);
+$("closeApiKeyHelp").addEventListener("click", () => $("apiKeyHelpDialog").close());
+$("closeApiKeyHelpBottom").addEventListener("click", () => $("apiKeyHelpDialog").close());
+$("goToKeySettingsBtn").addEventListener("click", openSettingsAndFocusApiKey);
+$("openApiKeysBtn").addEventListener("click", () => openExternalUrl("https://platform.openai.com/api-keys"));
+$("closePhotoHelp").addEventListener("click", () => $("photoHelpDialog").close());
+$("toggleAiKeyBtn").addEventListener("click", () => {
+  const input = $("openAiKeyInput");
+  const button = $("toggleAiKeyBtn");
+  const shouldShow = input.type === "password";
+  input.type = shouldShow ? "text" : "password";
+  button.textContent = shouldShow ? "Скрыть" : "Показать";
+});
+
 $("scanBtn").addEventListener("click", openScanner);
+$("photoBtn").addEventListener("click", () => openPhotoPicker("new"));
+$("photoInput").addEventListener("change", handlePhotoSelected);
+$("closeRecognition").addEventListener("click", closeRecognitionDialog);
+$("recognitionBackBtn").addEventListener("click", closeRecognitionDialog);
+$("recognitionRetakeBtn").addEventListener("click", retakeRecognitionPhoto);
+$("recognitionAddPhotoBtn").addEventListener("click", addRecognitionPhoto);
+$("recognitionManualBtn").addEventListener("click", openManualFromRecognition);
 $("manualBtn").addEventListener("click", () => openFoodDialog());
 $("favoritesBtn").addEventListener("click", () => { renderFavorites(); $("favoritesDialog").showModal(); });
 $("closeFavorites").addEventListener("click", () => $("favoritesDialog").close());
@@ -361,6 +1044,9 @@ $("settingsBtn").addEventListener("click", () => {
   $("goalProteinInput").value = state.goals.protein;
   $("goalFatInput").value = state.goals.fat;
   $("goalCarbsInput").value = state.goals.carbs;
+  $("useOpenAiInput").checked = Boolean(state.ai?.useOpenAI);
+  $("openAiKeyInput").value = state.ai?.openAiApiKey || "";
+  $("openAiModelInput").value = state.ai?.openAiModel || "gpt-4.1-mini";
   $("settingsDialog").showModal();
 });
 $("settingsForm").addEventListener("submit", e => {
@@ -371,8 +1057,20 @@ $("settingsForm").addEventListener("submit", e => {
     fat: Number($("goalFatInput").value),
     carbs: Number($("goalCarbsInput").value)
   };
+  state.ai = {
+    useOpenAI: $("useOpenAiInput").checked,
+    openAiApiKey: $("openAiKeyInput").value.trim(),
+    openAiModel: $("openAiModelInput").value.trim() || "gpt-4.1-mini"
+  };
   $("settingsDialog").close();
   render();
+});
+
+$("clearAiKeyBtn").addEventListener("click", () => {
+  state.ai.openAiApiKey = "";
+  $("openAiKeyInput").value = "";
+  saveState();
+  alert("API-ключ удалён с этого устройства");
 });
 
 $("saveBodyBtn").addEventListener("click", saveBody);

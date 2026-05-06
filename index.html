@@ -18,7 +18,10 @@
         <h1>Дневник питания</h1>
         <p id="todayLabel" class="muted"></p>
       </div>
-      <button id="settingsBtn" class="ghost">⚙️</button>
+      <div class="headerActions">
+        <button id="helpBtn" class="ghost roundIcon prominentHelp" aria-label="Помощь" title="Помощь">?</button>
+        <button id="settingsBtn" class="ghost roundIcon prominentSettings" aria-label="Настройки" title="Настройки">⚙️</button>
+      </div>
     </header>
 
     <section class="card">
@@ -39,10 +42,12 @@
     </section>
 
     <section class="actions">
-      <button id="scanBtn" class="primary">📷 Сканировать</button>
+      <button id="scanBtn" class="primary">▥ Штрихкод</button>
+      <button id="photoBtn" class="primary">📸 По фото</button>
       <button id="manualBtn">✍️ Добавить вручную</button>
       <button id="favoritesBtn">⭐ Избранное</button>
       <button id="copyYesterdayBtn">↩️ Вчерашнее</button>
+      <input id="photoInput" type="file" accept="image/*" capture="environment" hidden />
     </section>
 
     <section class="card">
@@ -93,6 +98,23 @@
     <p id="scannerStatus" class="muted">Наведите камеру на штрихкод</p>
   </dialog>
 
+
+  <dialog id="recognitionDialog">
+    <div class="dialogHead">
+      <b>Добавить продукт по фото</b>
+      <button id="closeRecognition" class="ghost">✕</button>
+    </div>
+    <div id="recognitionPreviews" class="photoPreviews" hidden></div>
+    <p id="recognitionStatus" class="muted">Выберите фото продукта</p>
+    <div id="recognitionList" class="list"></div>
+    <div class="recognitionFooter">
+      <button id="recognitionRetakeBtn" type="button" class="primary">📸 Новое фото</button>
+      <button id="recognitionAddPhotoBtn" type="button">➕ Добавить ещё фото</button>
+      <button id="recognitionManualBtn" type="button">Ввести вручную</button>
+      <button id="recognitionBackBtn" type="button" class="ghostBtn">← Назад</button>
+    </div>
+  </dialog>
+
   <dialog id="foodDialog">
     <form method="dialog" id="foodForm">
       <div class="dialogHead">
@@ -141,7 +163,38 @@
         <label>Жиры, г<input id="goalFatInput" type="number" step="1" min="0"></label>
         <label>Углеводы, г<input id="goalCarbsInput" type="number" step="1" min="0"></label>
       </div>
-      <button type="submit" class="primary">Сохранить нормы</button>
+
+      <hr class="sep" />
+      <div class="sectionHead">
+        <div>
+          <b>Распознавание по фото</b>
+          <p class="muted compact">Бесплатный режим работает локально. OpenAI можно включить отдельно, если нужен более точный вариант.</p>
+        </div>
+        <button id="apiKeyHelpBtn" type="button" class="ghost helpBubble" aria-label="Как добавить OpenAI API-ключ для увеличения точности распознавания">?</button>
+      </div>
+
+      <div class="tipCard">
+        <div>
+          <b>Без ключа тоже работает</b>
+          <p class="muted compact">Сначала попробуйте фото без OpenAI. Ключ нужен только для более точного распознавания.</p>
+        </div>
+      </div>
+
+      <label class="checkLabel"><input id="useOpenAiInput" type="checkbox"> Использовать OpenAI, если ключ указан</label>
+      <label>Ключ OpenAI
+        <div class="inputWithAction">
+          <input id="openAiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-... или оставьте пустым">
+          <button id="toggleAiKeyBtn" type="button" class="smallBtn">Показать</button>
+        </div>
+      </label>
+      <label>Модель<input id="openAiModelInput" placeholder="gpt-4.1-mini"></label>
+      <div class="row settingsActions">
+        <button id="clearAiKeyBtn" type="button">Удалить ключ</button>
+        <button id="apiKeyHelpInlineBtn" type="button">Как добавить ключ?</button>
+      </div>
+      <p class="muted compact">Не вставляйте сюда чужой ключ. Не публикуйте свой ключ в GitHub, чатах и скриншотах.</p>
+
+      <button type="submit" class="primary fullWidth">Сохранить настройки</button>
     </form>
   </dialog>
 
@@ -151,6 +204,67 @@
       <button id="closeFavorites" class="ghost">✕</button>
     </div>
     <div id="favoritesList" class="list"></div>
+  </dialog>
+
+  <dialog id="helpMenuDialog">
+    <div class="dialogHead">
+      <b>Помощь</b>
+      <button id="closeHelpMenu" class="ghost">✕</button>
+    </div>
+    <div class="helpTiles">
+      <button id="apiKeyHelpFromMenu" type="button" class="helpTile">
+        <span class="helpEmoji">🔑</span>
+        <span><b>Как добавить OpenAI API-ключ</b><small>Для увеличения точности распознавания</small></span>
+      </button>
+      <button id="photoHelpFromMenu" type="button" class="helpTile">
+        <span class="helpEmoji">📸</span>
+        <span><b>Как работает фото</b><small>Распознай продукт, проверь, введи вес</small></span>
+      </button>
+    </div>
+  </dialog>
+
+  <dialog id="apiKeyHelpDialog" class="helpDialog">
+    <div class="dialogHead">
+      <b>Как добавить OpenAI API-ключ для увеличения точности распознавания</b>
+      <button id="closeApiKeyHelp" class="ghost">✕</button>
+    </div>
+
+    <div class="notice good">
+      <b>Самое важное</b>
+      <p>Приложение работает и без ключа. Ключ нужен только для более точного распознавания еды по фото.</p>
+    </div>
+
+    <ol class="steps">
+      <li><b>Открой страницу API keys.</b><br><button id="openApiKeysBtn" type="button" class="linkButton">Открыть platform.openai.com/api-keys</button></li>
+      <li><b>Войди в аккаунт OpenAI.</b><br><span class="muted">Если аккаунта нет, зарегистрируйся на этой же странице.</span></li>
+      <li><b>Нажми “Create new secret key”.</b><br><span class="muted">Лучше назвать ключ понятно, например: <code>food-tracker-phone</code>.</span></li>
+      <li><b>Скопируй ключ сразу.</b><br><span class="muted">После создания его могут больше не показать полностью.</span></li>
+      <li><b>Вернись сюда: ⚙️ Настройки → Распознавание по фото.</b><br><span class="muted">Вставь ключ в поле “Ключ OpenAI”, включи переключатель и нажми “Сохранить настройки”.</span></li>
+      <li><b>Проверь расходы.</b><br><span class="muted">В OpenAI Platform стоит настроить лимит или уведомления о расходах.</span></li>
+    </ol>
+
+    <div class="notice warn">
+      <b>Правила безопасности</b>
+      <p>Не выкладывай ключ в GitHub, Telegram, Discord, скриншоты или README. Если ключ случайно попал в интернет — удали его в OpenAI Platform и создай новый.</p>
+    </div>
+
+    <div class="row helpActions">
+      <button id="goToKeySettingsBtn" type="button" class="primary">Вставить ключ</button>
+      <button id="closeApiKeyHelpBottom" type="button">Понятно</button>
+    </div>
+  </dialog>
+
+  <dialog id="photoHelpDialog" class="helpDialog">
+    <div class="dialogHead">
+      <b>Как добавить продукт по фото</b>
+      <button id="closePhotoHelp" class="ghost">✕</button>
+    </div>
+    <ol class="steps">
+      <li><b>Нажми “📸 По фото”.</b><br><span class="muted">Сфотографируй продукт или выбери фото из галереи.</span></li>
+      <li><b>Выбери подходящий вариант.</b><br><span class="muted">ИИ может ошибаться, поэтому всегда проверяй название.</span></li>
+      <li><b>Введи вес.</b><br><span class="muted">Приложение не угадывает вес по фото. Вес лучше взять с упаковки или кухонных весов.</span></li>
+      <li><b>Проверь КБЖУ и сохрани.</b><br><span class="muted">Если данных нет, введи значения вручную с этикетки.</span></li>
+    </ol>
   </dialog>
 
   <script src="https://unpkg.com/@zxing/browser@latest"></script>
