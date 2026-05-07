@@ -5,6 +5,7 @@ const defaultState = {
   entries: [],
   favorites: [],
   body: [],
+  productSearchMappings: {},
   ai: {
     useOpenAI: false,
     openAiApiKey: "",
@@ -26,6 +27,8 @@ let recognitionProgressTimer = null;
 let foodDialogBase100 = { kcal100: 0, protein100: 0, fat100: 0, carbs100: 0 };
 let foodDialogUpdating = false;
 let productSearchResults = [];
+let lastProductSearchQuery = "";
+let lastExpandedProductSearchTerms = [];
 let yesterdayDialogItems = [];
 let yesterdayDialogAddedIndexes = new Set();
 
@@ -38,6 +41,7 @@ function loadState() {
       ...loaded,
       selectedDate: today,
       goals: { ...defaultState.goals, ...(loaded.goals || {}) },
+      productSearchMappings: { ...(loaded.productSearchMappings || {}) },
       ai: { ...defaultState.ai, ...(loaded.ai || {}) }
     };
   } catch {
@@ -352,79 +356,241 @@ async function fetchOpenFoodFacts(barcode) {
 
 
 const PRODUCT_QUERY_TRANSLATIONS = [
-  { ru: ["яйцо", "яйца", "яичный"], en: ["egg", "eggs"] },
-  { ru: ["молоко"], en: ["milk"] },
-  { ru: ["миндаль"], en: ["almond", "almonds"] },
-  { ru: ["гречка", "гречневая каша"], en: ["buckwheat", "buckwheat porridge"] },
-  { ru: ["творог"], en: ["cottage cheese", "quark"] },
-  { ru: ["куриная грудка", "грудка куриная"], en: ["chicken breast"] },
-  { ru: ["курица"], en: ["chicken"] },
-  { ru: ["рис"], en: ["rice"] },
-  { ru: ["овсянка", "овсяная каша"], en: ["oatmeal", "porridge"] },
-  { ru: ["йогурт"], en: ["yogurt", "yoghurt"] },
-  { ru: ["кефир"], en: ["kefir"] },
-  { ru: ["сыр"], en: ["cheese"] },
-  { ru: ["банан"], en: ["banana"] },
-  { ru: ["яблоко"], en: ["apple"] },
-  { ru: ["помидор", "томат"], en: ["tomato"] },
-  { ru: ["огурец"], en: ["cucumber"] },
-  { ru: ["картофель", "картошка"], en: ["potato"] },
-  { ru: ["хлеб"], en: ["bread"] },
-  { ru: ["макароны", "паста"], en: ["pasta", "macaroni"] },
-  { ru: ["говядина"], en: ["beef"] },
-  { ru: ["свинина"], en: ["pork"] },
-  { ru: ["лосось"], en: ["salmon"] },
-  { ru: ["тунец"], en: ["tuna"] }
+  { ru: ["яйцо", "яйца", "яичный"], en: ["egg", "eggs"], canonical: "Яйцо куриное" },
+  { ru: ["молоко"], en: ["milk"], canonical: "Молоко" },
+  { ru: ["миндаль"], en: ["almond", "almonds"], canonical: "Миндаль" },
+  { ru: ["грецкий орех", "орех грецкий", "грецкие орехи", "орехи грецкие", "волошский орех"], en: ["walnut", "walnuts"], canonical: "Грецкий орех" },
+  { ru: ["арахис", "земляной орех"], en: ["peanut", "peanuts"], canonical: "Арахис" },
+  { ru: ["кешью"], en: ["cashew", "cashews"], canonical: "Кешью" },
+  { ru: ["фундук", "лесной орех"], en: ["hazelnut", "hazelnuts"], canonical: "Фундук" },
+  { ru: ["фисташки", "фисташка"], en: ["pistachio", "pistachios"], canonical: "Фисташки" },
+  { ru: ["семечки", "семена подсолнечника", "подсолнечные семечки"], en: ["sunflower seeds", "sunflower seed"], canonical: "Семечки подсолнечника" },
+  { ru: ["гречка", "гречневая каша", "гречневая крупа"], en: ["buckwheat", "buckwheat porridge", "buckwheat groats"], canonical: "Гречка" },
+  { ru: ["творог"], en: ["cottage cheese", "quark", "curd cheese"], canonical: "Творог" },
+  { ru: ["куриная грудка", "грудка куриная"], en: ["chicken breast"], canonical: "Куриная грудка" },
+  { ru: ["курица", "куриное филе", "филе куриное"], en: ["chicken", "chicken fillet"], canonical: "Курица" },
+  { ru: ["рис", "рисовая каша"], en: ["rice", "cooked rice", "rice porridge"], canonical: "Рис" },
+  { ru: ["овсянка", "овсяная каша", "овсяные хлопья"], en: ["oatmeal", "porridge", "oats", "rolled oats"], canonical: "Овсянка" },
+  { ru: ["йогурт"], en: ["yogurt", "yoghurt"], canonical: "Йогурт" },
+  { ru: ["кефир"], en: ["kefir"], canonical: "Кефир" },
+  { ru: ["сыр"], en: ["cheese"], canonical: "Сыр" },
+  { ru: ["банан"], en: ["banana"], canonical: "Банан" },
+  { ru: ["яблоко", "яблоки"], en: ["apple", "apples"], canonical: "Яблоко" },
+  { ru: ["груша", "груши"], en: ["pear", "pears"], canonical: "Груша" },
+  { ru: ["апельсин", "апельсины"], en: ["orange", "oranges"], canonical: "Апельсин" },
+  { ru: ["помидор", "помидоры", "томат", "томаты"], en: ["tomato", "tomatoes"], canonical: "Помидор" },
+  { ru: ["огурец", "огурцы"], en: ["cucumber", "cucumbers"], canonical: "Огурец" },
+  { ru: ["картофель", "картошка"], en: ["potato", "potatoes"], canonical: "Картофель" },
+  { ru: ["морковь", "морковка"], en: ["carrot", "carrots"], canonical: "Морковь" },
+  { ru: ["авокадо"], en: ["avocado"], canonical: "Авокадо" },
+  { ru: ["хлеб"], en: ["bread"], canonical: "Хлеб" },
+  { ru: ["макароны", "паста"], en: ["pasta", "macaroni"], canonical: "Макароны" },
+  { ru: ["говядина"], en: ["beef"], canonical: "Говядина" },
+  { ru: ["свинина"], en: ["pork"], canonical: "Свинина" },
+  { ru: ["лосось", "семга", "сёмга"], en: ["salmon"], canonical: "Лосось" },
+  { ru: ["тунец"], en: ["tuna"], canonical: "Тунец" },
+  { ru: ["масло сливочное", "сливочное масло"], en: ["butter"], canonical: "Сливочное масло" },
+  { ru: ["масло оливковое", "оливковое масло"], en: ["olive oil"], canonical: "Оливковое масло" },
+  { ru: ["чечевица", "красная чечевица", "зеленая чечевица", "зелёная чечевица"], en: ["lentil", "lentils", "red lentils", "green lentils"], canonical: "Чечевица" },
+  { ru: ["рожь", "ржаное зерно", "зерно ржи"], en: ["rye", "rye grain"], canonical: "Рожь" },
+  { ru: ["нут"], en: ["chickpea", "chickpeas", "garbanzo beans"], canonical: "Нут" },
+  { ru: ["булгур"], en: ["bulgur", "bulgur wheat"], canonical: "Булгур" },
+  { ru: ["киноа", "квиноа"], en: ["quinoa"], canonical: "Киноа" },
+  { ru: ["перловка", "перловая крупа"], en: ["pearl barley", "barley"], canonical: "Перловка" },
+  { ru: ["фасоль", "красная фасоль", "белая фасоль"], en: ["beans", "kidney beans", "white beans"], canonical: "Фасоль" },
+  { ru: ["горох"], en: ["peas", "split peas"], canonical: "Горох" }
 ];
 
 const LOCAL_NUTRITION_DB = [
   { names: ["яйцо", "яйца"], display: "Яйцо куриное", search: "egg", kcal100: 143, protein100: 12.6, fat100: 9.5, carbs100: 0.7 },
   { names: ["молоко"], display: "Молоко 2.5%", search: "milk", kcal100: 52, protein100: 2.8, fat100: 2.5, carbs100: 4.7 },
   { names: ["миндаль"], display: "Миндаль", search: "almonds", kcal100: 579, protein100: 21.2, fat100: 49.9, carbs100: 21.6 },
-  { names: ["гречка", "гречневая каша"], display: "Гречка варёная", search: "buckwheat porridge", kcal100: 110, protein100: 3.6, fat100: 1.1, carbs100: 21.3 },
+  { names: ["грецкий орех", "орех грецкий", "грецкие орехи", "орехи грецкие", "волошский орех"], display: "Грецкий орех", search: "walnuts", kcal100: 654, protein100: 15.2, fat100: 65.2, carbs100: 13.7 },
+  { names: ["арахис", "земляной орех"], display: "Арахис", search: "peanuts", kcal100: 567, protein100: 25.8, fat100: 49.2, carbs100: 16.1 },
+  { names: ["кешью"], display: "Кешью", search: "cashews", kcal100: 553, protein100: 18.2, fat100: 43.9, carbs100: 30.2 },
+  { names: ["фундук", "лесной орех"], display: "Фундук", search: "hazelnuts", kcal100: 628, protein100: 15, fat100: 60.8, carbs100: 16.7 },
+  { names: ["фисташки", "фисташка"], display: "Фисташки", search: "pistachios", kcal100: 562, protein100: 20.2, fat100: 45.3, carbs100: 27.2 },
+  { names: ["семечки", "семена подсолнечника", "подсолнечные семечки"], display: "Семечки подсолнечника", search: "sunflower seeds", kcal100: 584, protein100: 20.8, fat100: 51.5, carbs100: 20 },
+  { names: ["гречка", "гречневая каша", "гречневая крупа"], display: "Гречка варёная", search: "buckwheat porridge", kcal100: 110, protein100: 3.6, fat100: 1.1, carbs100: 21.3 },
   { names: ["творог"], display: "Творог 5%", search: "cottage cheese", kcal100: 121, protein100: 17.2, fat100: 5, carbs100: 1.8 },
   { names: ["куриная грудка", "грудка куриная"], display: "Куриная грудка готовая", search: "chicken breast", kcal100: 165, protein100: 31, fat100: 3.6, carbs100: 0 },
+  { names: ["курица", "куриное филе", "филе куриное"], display: "Курица готовая", search: "chicken", kcal100: 165, protein100: 31, fat100: 3.6, carbs100: 0 },
   { names: ["рис"], display: "Рис варёный", search: "rice cooked", kcal100: 130, protein100: 2.7, fat100: 0.3, carbs100: 28.2 },
   { names: ["овсянка", "овсяная каша"], display: "Овсяная каша на воде", search: "oatmeal", kcal100: 68, protein100: 2.4, fat100: 1.4, carbs100: 12 },
   { names: ["йогурт"], display: "Йогурт натуральный", search: "plain yogurt", kcal100: 61, protein100: 3.5, fat100: 3.3, carbs100: 4.7 },
   { names: ["кефир"], display: "Кефир 2.5%", search: "kefir", kcal100: 53, protein100: 3, fat100: 2.5, carbs100: 4 },
   { names: ["банан"], display: "Банан", search: "banana", kcal100: 89, protein100: 1.1, fat100: 0.3, carbs100: 22.8 },
-  { names: ["яблоко"], display: "Яблоко", search: "apple", kcal100: 52, protein100: 0.3, fat100: 0.2, carbs100: 13.8 },
-  { names: ["огурец"], display: "Огурец", search: "cucumber", kcal100: 15, protein100: 0.7, fat100: 0.1, carbs100: 3.6 },
-  { names: ["помидор", "томат"], display: "Помидор", search: "tomato", kcal100: 18, protein100: 0.9, fat100: 0.2, carbs100: 3.9 },
+  { names: ["яблоко", "яблоки"], display: "Яблоко", search: "apple", kcal100: 52, protein100: 0.3, fat100: 0.2, carbs100: 13.8 },
+  { names: ["груша", "груши"], display: "Груша", search: "pear", kcal100: 57, protein100: 0.4, fat100: 0.1, carbs100: 15.2 },
+  { names: ["апельсин", "апельсины"], display: "Апельсин", search: "orange", kcal100: 47, protein100: 0.9, fat100: 0.1, carbs100: 11.8 },
+  { names: ["огурец", "огурцы"], display: "Огурец", search: "cucumber", kcal100: 15, protein100: 0.7, fat100: 0.1, carbs100: 3.6 },
+  { names: ["помидор", "помидоры", "томат", "томаты"], display: "Помидор", search: "tomato", kcal100: 18, protein100: 0.9, fat100: 0.2, carbs100: 3.9 },
   { names: ["картофель", "картошка"], display: "Картофель варёный", search: "boiled potato", kcal100: 87, protein100: 1.9, fat100: 0.1, carbs100: 20.1 },
+  { names: ["морковь", "морковка"], display: "Морковь", search: "carrot", kcal100: 41, protein100: 0.9, fat100: 0.2, carbs100: 9.6 },
+  { names: ["авокадо"], display: "Авокадо", search: "avocado", kcal100: 160, protein100: 2, fat100: 14.7, carbs100: 8.5 },
   { names: ["хлеб"], display: "Хлеб", search: "bread", kcal100: 265, protein100: 9, fat100: 3.2, carbs100: 49 },
   { names: ["макароны", "паста"], display: "Макароны варёные", search: "cooked pasta", kcal100: 158, protein100: 5.8, fat100: 0.9, carbs100: 30.9 },
   { names: ["сыр"], display: "Сыр твёрдый", search: "cheese", kcal100: 356, protein100: 24, fat100: 28, carbs100: 2 },
   { names: ["говядина"], display: "Говядина готовая", search: "beef", kcal100: 250, protein100: 26, fat100: 15, carbs100: 0 },
-  { names: ["лосось"], display: "Лосось", search: "salmon", kcal100: 208, protein100: 20, fat100: 13, carbs100: 0 }
+  { names: ["лосось", "семга", "сёмга"], display: "Лосось", search: "salmon", kcal100: 208, protein100: 20, fat100: 13, carbs100: 0 },
+  { names: ["масло сливочное", "сливочное масло"], display: "Сливочное масло", search: "butter", kcal100: 717, protein100: 0.9, fat100: 81.1, carbs100: 0.1 },
+  { names: ["масло оливковое", "оливковое масло"], display: "Оливковое масло", search: "olive oil", kcal100: 884, protein100: 0, fat100: 100, carbs100: 0 },
+  { names: ["чечевица", "красная чечевица", "зеленая чечевица", "зелёная чечевица"], display: "Чечевица варёная", search: "cooked lentils", kcal100: 116, protein100: 9, fat100: 0.4, carbs100: 20.1 },
+  { names: ["рожь", "ржаное зерно", "зерно ржи"], display: "Рожь, зерно", search: "rye grain", kcal100: 338, protein100: 10.3, fat100: 1.6, carbs100: 75.9 },
+  { names: ["нут"], display: "Нут варёный", search: "cooked chickpeas", kcal100: 164, protein100: 8.9, fat100: 2.6, carbs100: 27.4 },
+  { names: ["булгур"], display: "Булгур варёный", search: "cooked bulgur", kcal100: 83, protein100: 3.1, fat100: 0.2, carbs100: 18.6 },
+  { names: ["киноа", "квиноа"], display: "Киноа варёная", search: "cooked quinoa", kcal100: 120, protein100: 4.4, fat100: 1.9, carbs100: 21.3 },
+  { names: ["перловка", "перловая крупа"], display: "Перловка варёная", search: "cooked pearl barley", kcal100: 123, protein100: 2.3, fat100: 0.4, carbs100: 28.2 },
+  { names: ["фасоль", "красная фасоль", "белая фасоль"], display: "Фасоль варёная", search: "cooked beans", kcal100: 127, protein100: 8.7, fat100: 0.5, carbs100: 22.8 },
+  { names: ["горох"], display: "Горох варёный", search: "cooked peas", kcal100: 84, protein100: 5.4, fat100: 0.2, carbs100: 15.6 }
 ];
 
 function containsRussianText(value) {
   return /[А-Яа-яЁё]/.test(String(value || ""));
 }
 
-function expandProductSearchTerms(query) {
-  const original = String(query || "").trim();
-  const lower = original.toLowerCase();
-  const terms = [original];
-
-  for (const item of PRODUCT_QUERY_TRANSLATIONS) {
-    if (item.ru.some(ru => lower.includes(ru))) {
-      terms.push(...item.ru, ...item.en);
-    }
-  }
-
-  return [...new Set(terms.map(t => String(t || "").trim()).filter(Boolean))].slice(0, 8);
+function normalizeSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[.,;:!?()\[\]{}"'«»]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function localNutritionProducts(query) {
-  const lower = normalizeFoodName(query);
-  if (!lower) return [];
+function searchTokens(value) {
+  return normalizeSearchText(value)
+    .split(" ")
+    .map(x => x.trim())
+    .filter(x => x.length > 1);
+}
 
-  return LOCAL_NUTRITION_DB
-    .filter(item => item.names.some(name => lower.includes(name) || normalizeFoodName(name).includes(lower)))
-    .map(item => ({
+function matchingTranslationGroups(query) {
+  const lower = normalizeSearchText(query);
+  return PRODUCT_QUERY_TRANSLATIONS.filter(item =>
+    item.ru.some(ru => lower.includes(normalizeSearchText(ru)) || normalizeSearchText(ru).includes(lower)) ||
+    item.en.some(en => lower.includes(normalizeSearchText(en)) || normalizeSearchText(en).includes(lower))
+  );
+}
+
+function uniqueSearchTerms(terms, limit = 16) {
+  const seen = new Set();
+  const result = [];
+  for (const term of terms) {
+    const cleaned = String(term || "").replace(/_/g, " ").replace(/\s+/g, " ").trim();
+    if (!cleaned || cleaned.length < 2 || cleaned.length > 60) continue;
+    const key = normalizeSearchText(cleaned);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(cleaned);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+function rememberedProductSearchTerms(query) {
+  const key = normalizeSearchText(query);
+  if (!key || !state.productSearchMappings) return [];
+  const saved = state.productSearchMappings[key];
+  if (!saved) return [];
+  if (Array.isArray(saved)) return saved;
+  return saved.terms || [];
+}
+
+function expandProductSearchTerms(query, extraTerms = []) {
+  const original = String(query || "").trim();
+  const groups = matchingTranslationGroups(original);
+  const terms = [];
+
+  terms.push(original);
+  terms.push(...rememberedProductSearchTerms(original));
+
+  for (const group of groups) {
+    terms.push(group.canonical, ...group.ru, ...group.en);
+  }
+
+  terms.push(...extraTerms);
+
+  if (!groups.length) {
+    const compact = normalizeSearchText(original);
+    if (compact && compact !== original.toLowerCase()) terms.push(compact);
+  }
+
+  return uniqueSearchTerms(terms, 18);
+}
+
+async function fetchWikidataProductTerms(query) {
+  const original = String(query || "").trim();
+  if (!original || !containsRussianText(original)) return [];
+
+  try {
+    const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&origin=*&language=ru&uselang=ru&type=item&limit=5&search=${encodeURIComponent(original)}`;
+    const searchRes = await fetch(searchUrl, { headers: { "Accept": "application/json" } });
+    if (!searchRes.ok) return [];
+
+    const searchData = await searchRes.json();
+    const ids = (searchData.search || [])
+      .map(item => item.id)
+      .filter(Boolean)
+      .slice(0, 4);
+    if (!ids.length) return [];
+
+    const entityUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&origin=*&props=labels|aliases&languages=ru|en&ids=${encodeURIComponent(ids.join("|"))}`;
+    const entityRes = await fetch(entityUrl, { headers: { "Accept": "application/json" } });
+    if (!entityRes.ok) return [];
+
+    const entityData = await entityRes.json();
+    const terms = [];
+    for (const entity of Object.values(entityData.entities || {})) {
+      const ruLabel = entity.labels?.ru?.value;
+      const enLabel = entity.labels?.en?.value;
+      if (ruLabel) terms.push(ruLabel);
+      if (enLabel) terms.push(enLabel);
+      for (const alias of entity.aliases?.ru || []) terms.push(alias.value);
+      for (const alias of entity.aliases?.en || []) terms.push(alias.value);
+    }
+
+    return uniqueSearchTerms(terms, 12);
+  } catch (e) {
+    console.warn("Wikidata search expansion failed", e);
+    return [];
+  }
+}
+
+async function buildSmartProductSearchTerms(query) {
+  const original = String(query || "").trim();
+  const knownTerms = expandProductSearchTerms(original);
+  const hasKnownMatch = matchingTranslationGroups(original).length > 0 || rememberedProductSearchTerms(original).length > 0;
+  const needsExternalExpansion = containsRussianText(original) && !hasKnownMatch;
+  const wikidataTerms = needsExternalExpansion ? await fetchWikidataProductTerms(original) : [];
+  return expandProductSearchTerms(original, wikidataTerms);
+}
+
+function localNutritionProducts(query, expandedTerms = []) {
+  const terms = uniqueSearchTerms([query, ...expandedTerms], 24).map(normalizeSearchText).filter(Boolean);
+  if (!terms.length) return [];
+
+  const scored = LOCAL_NUTRITION_DB
+    .map(item => {
+      const names = [...item.names, item.display, item.search].map(normalizeSearchText);
+      let best = { score: 0, exact: false, includes: false };
+      for (const lower of terms) {
+        const exact = names.some(name => lower === name);
+        const includes = names.some(name => lower.includes(name) || name.includes(lower));
+        const tokenOverlap = searchTokens(lower).filter(token => names.some(name => name.includes(token))).length;
+        const score = exact ? 1000 : includes ? 850 : tokenOverlap ? 650 + tokenOverlap * 20 : 0;
+        if (score > best.score) best = { score, exact, includes };
+      }
+      const { score, exact, includes } = best;
+      return { item, score, exact, includes };
+    })
+    .filter(x => x.score > 0);
+
+  const hasStrongMatch = scored.some(x => x.exact || x.includes);
+  return scored
+    .filter(x => !hasStrongMatch || x.exact || x.includes)
+    .sort((a, b) => b.score - a.score)
+    .map(({ item, score }) => ({
       id: uid(),
       date: state.selectedDate,
       barcode: "",
@@ -436,8 +602,40 @@ function localNutritionProducts(query) {
       carbs100: round1(item.carbs100),
       meal: "Перекус",
       source: `Источник: Локальный справочник, запрос «${query}»`,
-      meta: { brand: "Локальный справочник", quantity: "базовое значение на 100 г", searchName: item.search }
+      meta: { brand: "Локальный справочник", quantity: "базовое значение на 100 г", searchName: item.search, searchTerm: item.search, source: "local" },
+      _score: score + 1000
     }));
+}
+
+function productRelevanceScore(product, originalQuery, expandedTerms) {
+  if (product.meta?.source === "local") return product._score || 2000;
+
+  const productText = normalizeSearchText([
+    product.name,
+    product.meta?.brand,
+    product.meta?.quantity,
+    product.meta?.rawText
+  ].filter(Boolean).join(" "));
+
+  if (!productText) return 0;
+
+  let score = 0;
+  const terms = [originalQuery, ...expandedTerms].filter(Boolean);
+  for (const term of terms) {
+    const normalizedTerm = normalizeSearchText(term);
+    if (!normalizedTerm) continue;
+    if (productText.includes(normalizedTerm)) score += 220 + normalizedTerm.length;
+
+    const tokens = searchTokens(normalizedTerm);
+    if (tokens.length && tokens.every(token => productText.includes(token))) score += 130 + tokens.length * 10;
+    score += tokens.filter(token => productText.includes(token)).length * 28;
+  }
+
+  const queryTokens = searchTokens(originalQuery);
+  const productName = normalizeSearchText(product.name);
+  score += queryTokens.filter(token => productName.includes(token)).length * 45;
+
+  return score;
 }
 
 function productFromOpenFoodFacts(p, searchTerm, sourceLabel = "Open Food Facts") {
@@ -453,7 +651,7 @@ function productFromOpenFoodFacts(p, searchTerm, sourceLabel = "Open Food Facts"
 
   const brand = String(p.brands || "").split(",")[0].trim();
   const quantity = String(p.quantity || p.serving_size || "").trim();
-  const name = p.product_name || searchTerm;
+  const name = p.product_name || p.generic_name || searchTerm;
 
   return {
     id: uid(),
@@ -467,12 +665,12 @@ function productFromOpenFoodFacts(p, searchTerm, sourceLabel = "Open Food Facts"
     carbs100: round1(carbs),
     meal: "Перекус",
     source: `Источник: ${sourceLabel}, поиск по названию «${searchTerm}»`,
-    meta: { brand: brand || sourceLabel, quantity }
+    meta: { brand: brand || sourceLabel, quantity, searchTerm, rawText: [p.product_name, p.generic_name, p.categories, p.categories_tags].flat().filter(Boolean).join(" "), source: sourceLabel }
   };
 }
 
 async function fetchOpenFoodFactsFromEndpoint(baseUrl, query, sourceLabel, limit = 8) {
-  const fields = "product_name,nutriments,brands,code,quantity,serving_size";
+  const fields = "product_name,generic_name,categories,categories_tags,nutriments,brands,code,quantity,serving_size";
   const url = `${baseUrl}/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=${fields}&page_size=${Math.max(limit * 2, 16)}`;
   const res = await fetch(url, { headers: { "Accept": "application/json" }});
   if (!res.ok) return [];
@@ -487,23 +685,34 @@ async function fetchOpenFoodFactsOptions(searchTerm, limit = 12) {
   const query = String(searchTerm || "").trim();
   if (!query) return [];
 
-  const expandedTerms = expandProductSearchTerms(query);
-  const localResults = localNutritionProducts(query);
+  const expandedTerms = await buildSmartProductSearchTerms(query);
+  lastExpandedProductSearchTerms = expandedTerms;
+  const localResults = localNutritionProducts(query, expandedTerms);
   const requests = [];
 
   for (const term of expandedTerms) {
     const isRussian = containsRussianText(term);
-    requests.push(fetchOpenFoodFactsFromEndpoint("https://ru.openfoodfacts.org", term, "Open Food Facts RU", 6));
-    requests.push(fetchOpenFoodFactsFromEndpoint("https://world.openfoodfacts.org", term, isRussian ? "Open Food Facts World RU" : "Open Food Facts World", 6));
+    if (isRussian) {
+      requests.push(fetchOpenFoodFactsFromEndpoint("https://ru.openfoodfacts.org", term, "Open Food Facts RU", 5));
+      requests.push(fetchOpenFoodFactsFromEndpoint("https://world.openfoodfacts.org", term, "Open Food Facts World RU", 4));
+    } else {
+      requests.push(fetchOpenFoodFactsFromEndpoint("https://world.openfoodfacts.org", term, "Open Food Facts World", 6));
+      requests.push(fetchOpenFoodFactsFromEndpoint("https://ru.openfoodfacts.org", term, "Open Food Facts RU", 4));
+    }
   }
 
   const settled = await Promise.allSettled(requests);
   const externalResults = settled.flatMap(result => result.status === "fulfilled" ? result.value : []);
-  const all = [...localResults, ...externalResults];
+  const scoredExternal = externalResults
+    .map(product => ({ ...product, _score: productRelevanceScore(product, query, expandedTerms) }))
+    .filter(product => product._score >= 90);
+
+  const all = [...localResults, ...scoredExternal]
+    .sort((a, b) => (b._score || 0) - (a._score || 0));
 
   const seen = new Set();
   return all.filter(product => {
-    const key = `${normalizeFoodName(product.name)}|${product.barcode || product.source}`;
+    const key = product.barcode ? `barcode:${product.barcode}` : `name:${normalizeFoodName(product.name)}|${product.meta?.brand || product.source}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -1927,10 +2136,33 @@ function addYesterdayItem(index) {
 }
 
 
+function rememberProductSearchMapping(query, product) {
+  const key = normalizeSearchText(query);
+  if (!key || !product) return;
+
+  const terms = uniqueSearchTerms([
+    product.meta?.searchTerm,
+    product.meta?.searchName,
+    product.name,
+    ...(lastExpandedProductSearchTerms || [])
+  ], 12);
+
+  if (!terms.length) return;
+  state.productSearchMappings = state.productSearchMappings || {};
+  state.productSearchMappings[key] = {
+    terms,
+    selectedName: product.name,
+    updatedAt: new Date().toISOString()
+  };
+  saveState();
+}
+
 function openProductSearchDialog(initialQuery = "") {
   productSearchResults = [];
+  lastProductSearchQuery = initialQuery;
+  lastExpandedProductSearchTerms = [];
   $("productSearchInput").value = initialQuery;
-  $("productSearchStatus").textContent = "Введите название продукта и нажмите “Искать”.";
+  $("productSearchStatus").textContent = "Введите название продукта по-русски. Я расширю запрос и поищу по нескольким вариантам.";
   $("productSearchList").innerHTML = "";
   $("productSearchDialog").showModal();
   setTimeout(() => $("productSearchInput")?.focus(), 80);
@@ -1944,8 +2176,9 @@ async function searchProductByName(event) {
     return;
   }
 
+  lastProductSearchQuery = query;
   $("productSearchStatus").textContent = `Ищу продукты по запросу «${query}»...`;
-  $("productSearchList").innerHTML = `<div class="item"><div class="title">Поиск...</div><div class="meta">Проверяю локальный справочник, русскоязычный и мировой Open Food Facts.</div></div>`;
+  $("productSearchList").innerHTML = `<div class="item"><div class="title">Поиск...</div><div class="meta">Расширяю русский запрос, проверяю сохранённые соответствия, Wikidata, локальный справочник и Open Food Facts.</div></div>`;
 
   try {
     productSearchResults = await fetchOpenFoodFactsOptions(query, 12);
@@ -1973,7 +2206,8 @@ function renderProductSearchResults(query) {
     return;
   }
 
-  $("productSearchStatus").textContent = `Найдено вариантов: ${productSearchResults.length}. Запрос расширен переводом и несколькими источниками.`;
+  const searchedTerms = (lastExpandedProductSearchTerms || []).slice(0, 5).join(", ");
+  $("productSearchStatus").textContent = `Найдено вариантов: ${productSearchResults.length}. Искал: ${searchedTerms || query}.`;
   box.innerHTML = productSearchResults.map((product, index) => {
     const meta = [product.meta?.brand, product.meta?.quantity].filter(Boolean).join(" · ");
     return `<div class="item">
@@ -1989,6 +2223,7 @@ function renderProductSearchResults(query) {
 function selectProductSearchResult(index) {
   const product = productSearchResults[index];
   if (!product) return;
+  rememberProductSearchMapping(lastProductSearchQuery || $("productSearchInput").value.trim(), product);
   $("productSearchDialog").close();
   openFoodDialog({ ...product, id: uid(), date: state.selectedDate, grams: 100 });
 }
