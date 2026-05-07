@@ -165,81 +165,93 @@
       </div>
 
       <div class="foodDialogBody">
-      <input type="hidden" id="entryId" />
-      <label>Название продукта<input id="nameInput" required placeholder="Например: творог 5%"></label>
-      <label>Штрихкод<input id="barcodeInput" placeholder="Необязательно"></label>
-      <label>Прием пищи
-        <select id="mealInput">
-          <option>Завтрак</option>
-          <option>Обед</option>
-          <option>Ужин</option>
-          <option>Перекус</option>
-        </select>
-      </label>
+        <input type="hidden" id="entryId" />
+        <label>Название продукта<input id="nameInput" required placeholder="Например: творог 5%"></label>
+        <label>Штрихкод<input id="barcodeInput" placeholder="Необязательно"></label>
+        <label>Прием пищи
+          <select id="mealInput">
+            <option>Завтрак</option>
+            <option>Обед</option>
+            <option>Ужин</option>
+            <option>Перекус</option>
+          </select>
+        </label>
 
-      <div class="formgrid">
-        <label>Порция, г<input id="gramsInput" type="number" step="1" min="1" value="100" required></label>
-        <label>Ккал в порции<input id="kcalInput" type="number" step="0.1" min="0" required></label>
-        <label>Белки в порции, г<input id="proteinInput" type="number" step="0.1" min="0" required></label>
-        <label>Жиры в порции, г<input id="fatInput" type="number" step="0.1" min="0" required></label>
-        <label>Углеводы в порции, г<input id="carbsInput" type="number" step="0.1" min="0" required></label>
+        <div class="formgrid">
+          <label>Порция, г<input id="gramsInput" type="number" step="1" min="1" value="100" required></label>
+          <label>Ккал в порции<input id="kcalInput" type="number" step="0.1" min="0" required></label>
+          <label>Белки в порции, г<input id="proteinInput" type="number" step="0.1" min="0" required></label>
+          <label>Жиры в порции, г<input id="fatInput" type="number" step="0.1" min="0" required></label>
+          <label>Углеводы в порции, г<input id="carbsInput" type="number" step="0.1" min="0" required></label>
+        </div>
+
+        <p id="portionInfo" class="muted compact">КБЖУ показаны для указанной порции. При изменении веса значения пересчитаются автоматически.</p>
+        <p id="sourceInfo" class="muted"></p>
       </div>
 
-      <p id="portionInfo" class="muted compact">КБЖУ показаны для указанной порции. При изменении веса значения пересчитаются автоматически.</p>
-      <p id="sourceInfo" class="muted"></p>
-
-      <div class="row between foodDialogActions">
+      <div class="modalFooter foodDialogActions">
         <button type="button" id="favoriteToggle">⭐ В избранное</button>
-        <button type="submit" class="primary">Сохранить</button>
-      </div>
+        <button type="submit" class="primary appSaveBtn">Сохранить</button>
       </div>
     </form>
   </dialog>
 
-  <dialog id="settingsDialog">
+  <dialog id="settingsDialog" class="settingsDialog">
     <form method="dialog" id="settingsForm">
       <div class="dialogHead">
-        <b>Дневные нормы</b>
+        <div>
+          <b>Настройки</b>
+          <p class="muted compact">Дневные нормы и распознавание по фото</p>
+        </div>
         <button id="closeSettingsDialog" type="button" class="ghost" aria-label="Закрыть настройки">✕</button>
       </div>
-      <div class="formgrid">
-        <label>Калории<input id="goalKcalInput" type="number" step="10" min="1000"></label>
-        <label>Белки, г<input id="goalProteinInput" type="number" step="1" min="0"></label>
-        <label>Жиры, г<input id="goalFatInput" type="number" step="1" min="0"></label>
-        <label>Углеводы, г<input id="goalCarbsInput" type="number" step="1" min="0"></label>
+
+      <div class="settingsDialogBody">
+        <section class="settingsSection">
+          <div class="settingsSectionTitle"><span>1</span><b>Дневные нормы</b></div>
+          <div class="formgrid">
+            <label>Калории<input id="goalKcalInput" type="number" step="10" min="1000"></label>
+            <label>Белки, г<input id="goalProteinInput" type="number" step="1" min="0"></label>
+            <label>Жиры, г<input id="goalFatInput" type="number" step="1" min="0"></label>
+            <label>Углеводы, г<input id="goalCarbsInput" type="number" step="1" min="0"></label>
+          </div>
+        </section>
+
+        <section class="settingsSection">
+          <div class="sectionHead settingsPhotoHead">
+            <div>
+              <div class="settingsSectionTitle"><span>2</span><b>Настройки распознавания по фото</b></div>
+              <p class="muted compact">Бесплатный режим работает локально через Food-101. OpenAI можно включить отдельно, если нужен более точный вариант.</p>
+            </div>
+            <button id="apiKeyHelpBtn" type="button" class="ghost helpBubble" aria-label="Как добавить OpenAI API-ключ для увеличения точности распознавания">?</button>
+          </div>
+
+          <div class="tipCard">
+            <div>
+              <b>Без ключа тоже работает</b>
+              <p class="muted compact">Сначала попробуйте фото без OpenAI. Локальная модель Food-101 работает прямо на устройстве, а ключ нужен только для ещё более точного распознавания.</p>
+            </div>
+          </div>
+
+          <label class="checkLabel"><input id="useOpenAiInput" type="checkbox"> Использовать OpenAI, если ключ указан</label>
+          <label>Ключ OpenAI
+            <div class="inputWithAction">
+              <input id="openAiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-... или оставьте пустым">
+              <button id="toggleAiKeyBtn" type="button" class="smallBtn">Показать</button>
+            </div>
+          </label>
+          <label>Модель<input id="openAiModelInput" placeholder="gpt-4.1-mini"></label>
+          <div class="row settingsActions">
+            <button id="clearAiKeyBtn" type="button">Удалить ключ</button>
+            <button id="apiKeyHelpInlineBtn" type="button">Как добавить ключ?</button>
+          </div>
+          <p class="muted compact">Не вставляйте сюда чужой ключ. Не публикуйте свой ключ в GitHub, чатах и скриншотах.</p>
+        </section>
       </div>
 
-      <hr class="sep" />
-      <div class="sectionHead">
-        <div>
-          <b>Распознавание по фото</b>
-          <p class="muted compact">Бесплатный режим работает локально через Food-101. OpenAI можно включить отдельно, если нужен более точный вариант.</p>
-        </div>
-        <button id="apiKeyHelpBtn" type="button" class="ghost helpBubble" aria-label="Как добавить OpenAI API-ключ для увеличения точности распознавания">?</button>
+      <div class="modalFooter settingsDialogActions">
+        <button type="submit" class="primary appSaveBtn">Сохранить настройки</button>
       </div>
-
-      <div class="tipCard">
-        <div>
-          <b>Без ключа тоже работает</b>
-          <p class="muted compact">Сначала попробуйте фото без OpenAI. Локальная модель Food-101 работает прямо на устройстве, а ключ нужен только для ещё более точного распознавания.</p>
-        </div>
-      </div>
-
-      <label class="checkLabel"><input id="useOpenAiInput" type="checkbox"> Использовать OpenAI, если ключ указан</label>
-      <label>Ключ OpenAI
-        <div class="inputWithAction">
-          <input id="openAiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-... или оставьте пустым">
-          <button id="toggleAiKeyBtn" type="button" class="smallBtn">Показать</button>
-        </div>
-      </label>
-      <label>Модель<input id="openAiModelInput" placeholder="gpt-4.1-mini"></label>
-      <div class="row settingsActions">
-        <button id="clearAiKeyBtn" type="button">Удалить ключ</button>
-        <button id="apiKeyHelpInlineBtn" type="button">Как добавить ключ?</button>
-      </div>
-      <p class="muted compact">Не вставляйте сюда чужой ключ. Не публикуйте свой ключ в GitHub, чатах и скриншотах.</p>
-
-      <button type="submit" class="primary fullWidth">Сохранить настройки</button>
     </form>
   </dialog>
 

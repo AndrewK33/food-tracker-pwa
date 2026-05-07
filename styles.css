@@ -416,3 +416,141 @@ dialog{
     font-size:30px !important;
   }
 }
+
+
+/* UX fix: понятные настройки и единый нижний блок действий */
+.modalFooter{
+  flex:0 0 auto;
+  display:flex;
+  gap:10px;
+  align-items:stretch;
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  background:#fff;
+  border-top:1px solid #eaecf0;
+  box-shadow:0 -8px 22px rgba(16,24,40,.05);
+}
+.modalFooter button{
+  min-height:52px;
+  border-radius:14px;
+}
+.modalFooter .appSaveBtn{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:52px;
+  padding:13px 14px;
+  font-size:15px;
+}
+#foodDialog .foodDialogBody{
+  padding:14px 16px 18px;
+}
+#foodDialog .foodDialogActions{
+  position:static;
+  bottom:auto;
+  margin:0;
+  flex-direction:row;
+  justify-content:space-between;
+}
+#foodDialog .foodDialogActions button{
+  flex:1;
+  width:auto;
+}
+#foodDialog #sourceInfo{
+  margin-bottom:0;
+}
+#settingsDialog.settingsDialog,
+#settingsDialog{
+  width:min(96vw,560px);
+  padding:0;
+  overflow:hidden;
+}
+#settingsDialog[open]{
+  display:flex;
+  flex-direction:column;
+}
+#settingsDialog form{
+  width:100%;
+  max-height:inherit;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  padding:0;
+}
+#settingsDialog .dialogHead{
+  position:static;
+  top:auto;
+  z-index:3;
+  margin:0;
+  padding:14px 16px 10px 18px;
+  background:#fff;
+  border-bottom:1px solid #eaecf0;
+}
+.settingsDialogBody{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  padding:14px 16px 18px;
+}
+.settingsSection{
+  background:#fff;
+  border:1px solid #eaecf0;
+  border-radius:18px;
+  padding:14px;
+  margin:0 0 14px;
+}
+.settingsSectionTitle{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin-bottom:10px;
+}
+.settingsSectionTitle span{
+  width:26px;
+  height:26px;
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:#eef4ff;
+  color:#3538cd;
+  font-size:13px;
+  font-weight:800;
+  flex:0 0 auto;
+}
+.settingsSectionTitle b{
+  font-size:16px;
+}
+.settingsPhotoHead{
+  margin-bottom:10px;
+}
+.settingsPhotoHead .settingsSectionTitle{
+  margin-bottom:4px;
+}
+#settingsDialog .settingsDialogActions{
+  margin:0;
+  justify-content:center;
+}
+#settingsDialog .settingsDialogActions .appSaveBtn{
+  width:100%;
+}
+#settingsDialog .fullWidth{
+  position:static;
+  margin:0;
+  padding:13px 14px;
+  border-radius:14px;
+  box-shadow:none;
+}
+@media(max-width:420px){
+  .modalFooter{
+    padding:10px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  #foodDialog .foodDialogActions{
+    flex-direction:column;
+  }
+  #settingsDialog .settingsActions{
+    flex-direction:column;
+  }
+}
