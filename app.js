@@ -10,7 +10,7 @@ const defaultState = {
     openAiApiKey: "",
     openAiModel: "gpt-4.1-mini"
   },
-  selectedDate: new Date().toISOString().slice(0,10)
+  selectedDate: todayISO()
 };
 
 let state = loadState();
@@ -27,16 +27,18 @@ let foodDialogBase100 = { kcal100: 0, protein100: 0, fat100: 0, carbs100: 0 };
 let foodDialogUpdating = false;
 
 function loadState() {
+  const today = todayISO();
   try {
     const loaded = JSON.parse(localStorage.getItem(LS_KEY)) || {};
     return {
       ...structuredClone(defaultState),
       ...loaded,
+      selectedDate: today,
       goals: { ...defaultState.goals, ...(loaded.goals || {}) },
       ai: { ...defaultState.ai, ...(loaded.ai || {}) }
     };
   } catch {
-    return structuredClone(defaultState);
+    return { ...structuredClone(defaultState), selectedDate: today };
   }
 }
 function saveState() {
@@ -56,7 +58,23 @@ function format1(n) {
   const value = round1(n);
   return Number.isInteger(value) ? String(value) : String(value);
 }
-function todayISO() { return new Date().toISOString().slice(0,10); }
+function toLocalISODate(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function todayISO() { return toLocalISODate(new Date()); }
+function dateFromISO(date) {
+  const [year, month, day] = String(date || todayISO()).split("-").map(Number);
+  if (!year || !month || !day) return new Date();
+  return new Date(year, month - 1, day);
+}
+function addDaysISO(date, delta) {
+  const d = dateFromISO(date);
+  d.setDate(d.getDate() + delta);
+  return toLocalISODate(d);
+}
 function normalizeFoodRecord(e) {
   return {
     ...e,
@@ -83,7 +101,7 @@ function totalsForDate(date) {
 function render() {
   state.entries = state.entries.map(normalizeFoodRecord);
   state.favorites = state.favorites.map(normalizeFoodRecord);
-  $("todayLabel").textContent = new Date(state.selectedDate).toLocaleDateString("ru-RU", { weekday:"long", day:"numeric", month:"long" });
+  $("todayLabel").textContent = dateFromISO(state.selectedDate).toLocaleDateString("ru-RU", { weekday:"long", day:"numeric", month:"long" });
   $("datePicker").value = state.selectedDate;
 
   const t = totalsForDate(state.selectedDate);
@@ -150,7 +168,7 @@ function renderHistory() {
     const t = totalsForDate(date);
     const diff = state.goals.kcal - t.kcal;
     return `<div class="item" onclick="selectHistoryDate('${date}')">
-      <div class="title">${new Date(date).toLocaleDateString("ru-RU")}</div>
+      <div class="title">${dateFromISO(date).toLocaleDateString("ru-RU")}</div>
       <div class="meta">${Math.round(t.kcal)} ккал · Б ${Math.round(t.protein)} · Ж ${Math.round(t.fat)} · У ${Math.round(t.carbs)}</div>
       <div class="meta">${diff >= 0 ? "Недобор" : "Превышение"} ${Math.round(Math.abs(diff))} ккал</div>
     </div>`;
@@ -165,18 +183,18 @@ function renderBody() {
     return;
   }
   box.innerHTML = items.map(x => `<div class="item">
-    <div class="title">${new Date(x.date).toLocaleDateString("ru-RU")}</div>
+    <div class="title">${dateFromISO(x.date).toLocaleDateString("ru-RU")}</div>
     <div class="meta">Вес: ${x.weight || "—"} кг · Талия: ${x.waist || "—"} см</div>
     <div class="itemActions"><button class="danger" onclick="deleteBody('${x.id}')">Удалить</button></div>
   </div>`).join("");
 }
 
 function analyticsDates(days = 14) {
-  const end = new Date(state.selectedDate || todayISO());
+  const end = dateFromISO(state.selectedDate || todayISO());
   return Array.from({ length: days }, (_, i) => {
     const d = new Date(end);
     d.setDate(end.getDate() - (days - 1 - i));
-    return d.toISOString().slice(0, 10);
+    return toLocalISODate(d);
   });
 }
 
@@ -287,12 +305,12 @@ function renderAnalytics() {
 }
 
 function dateLabelTiny(date) {
-  const d = new Date(date);
+  const d = dateFromISO(date);
   return `${d.getDate()}.${d.getMonth() + 1}`;
 }
 
 function dateLabelShort(date) {
-  return new Date(date).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  return dateFromISO(date).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
 async function fetchOpenFoodFacts(barcode) {
@@ -1724,9 +1742,7 @@ function deleteFavorite(id) {
 }
 
 function copyYesterday() {
-  const d = new Date(state.selectedDate);
-  d.setDate(d.getDate() - 1);
-  const y = d.toISOString().slice(0,10);
+  const y = addDaysISO(state.selectedDate, -1);
   const items = state.entries.filter(e => e.date === y);
   if (!items.length) return alert("За вчера нет записей");
   state.entries.push(...items.map(e => ({ ...e, id: uid(), date: state.selectedDate })));
@@ -1935,7 +1951,7 @@ $("importFile").addEventListener("change", async e => {
   try {
     const imported = JSON.parse(text);
     if (!confirm("Импорт заменит текущие данные. Продолжить?")) return;
-    state = { ...defaultState, ...imported };
+    state = { ...defaultState, ...imported, selectedDate: todayISO() };
     render();
   } catch {
     alert("Не удалось прочитать JSON");
@@ -1943,7 +1959,7 @@ $("importFile").addEventListener("change", async e => {
 });
 $("clearBtn").addEventListener("click", () => {
   if (!confirm("Удалить все данные приложения?")) return;
-  state = structuredClone(defaultState);
+  state = { ...structuredClone(defaultState), selectedDate: todayISO() };
   render();
 });
 
@@ -1966,6 +1982,23 @@ $("analyticsTodayBtn").addEventListener("click", () => {
 });
 
 document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+
+let lastKnownToday = todayISO();
+function syncSelectedDateIfDayChanged() {
+  const currentToday = todayISO();
+  if (currentToday !== lastKnownToday) {
+    if (state.selectedDate === lastKnownToday) {
+      state.selectedDate = currentToday;
+      render();
+    }
+    lastKnownToday = currentToday;
+  }
+}
+setInterval(syncSelectedDateIfDayChanged, 60 * 1000);
+window.addEventListener("focus", syncSelectedDateIfDayChanged);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) syncSelectedDateIfDayChanged();
+});
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
