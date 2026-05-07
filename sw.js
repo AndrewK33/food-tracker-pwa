@@ -1,4 +1,4 @@
-const CACHE = "food-tracker-pwa-v14";
+const CACHE = "food-tracker-pwa-v15";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", event => {
