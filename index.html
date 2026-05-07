@@ -45,9 +45,10 @@
     <section class="actions">
       <button id="scanBtn" class="primary">▥ Штрихкод</button>
       <button id="photoBtn" class="primary">📸 По фото</button>
-      <button id="manualBtn">✍️ Добавить вручную</button>
+      <button id="searchProductBtn">🔎 Поиск</button>
+      <button id="manualBtn">✍️ Вручную</button>
       <button id="favoritesBtn">⭐ Избранное</button>
-      <button id="copyYesterdayBtn">↩️ Вчерашнее</button>
+      <button id="copyYesterdayBtn">↩️ Из вчера</button>
       <input id="photoInput" type="file" accept="image/*" capture="environment" hidden />
     </section>
 
@@ -261,6 +262,39 @@
       <button id="closeFavorites" class="ghost">✕</button>
     </div>
     <div id="favoritesList" class="list"></div>
+  </dialog>
+
+  <dialog id="productSearchDialog" class="productSearchDialog">
+    <div class="dialogHead">
+      <div>
+        <b>Поиск продукта</b>
+        <p class="muted compact">Введите название: яйца, миндаль, молоко, творог</p>
+      </div>
+      <button id="closeProductSearch" type="button" class="ghost" aria-label="Закрыть поиск продукта">✕</button>
+    </div>
+    <form id="productSearchForm" class="dialogSearchForm">
+      <div class="inputWithAction">
+        <input id="productSearchInput" type="search" placeholder="Например: яйца, миндаль, молоко" autocomplete="off">
+        <button type="submit" class="primary smallBtn">Искать</button>
+      </div>
+    </form>
+    <p id="productSearchStatus" class="muted compact">Поиск выполнится по открытой базе продуктов. Выберите подходящий вариант из списка.</p>
+    <div id="productSearchList" class="list dialogList"></div>
+  </dialog>
+
+  <dialog id="yesterdayDialog" class="yesterdayDialog">
+    <div class="dialogHead">
+      <div>
+        <b>Из вчерашнего рациона</b>
+        <p id="yesterdayDialogDate" class="muted compact"></p>
+      </div>
+      <button id="closeYesterdayDialog" type="button" class="ghost" aria-label="Закрыть вчерашний рацион">✕</button>
+    </div>
+    <p id="yesterdayDialogStatus" class="muted compact">Выберите продукты, которые хотите добавить на сегодня.</p>
+    <div id="yesterdayList" class="list dialogList"></div>
+    <div class="modalFooter singleActionFooter">
+      <button id="doneYesterdayDialog" type="button" class="primary appSaveBtn">Готово</button>
+    </div>
   </dialog>
 
   <dialog id="helpMenuDialog">
