@@ -25,6 +25,9 @@ let recognitionProgressValue = 0;
 let recognitionProgressTimer = null;
 let foodDialogBase100 = { kcal100: 0, protein100: 0, fat100: 0, carbs100: 0 };
 let foodDialogUpdating = false;
+let productSearchResults = [];
+let yesterdayDialogItems = [];
+let yesterdayDialogAddedIndexes = new Set();
 
 function loadState() {
   const today = todayISO();
@@ -348,38 +351,63 @@ async function fetchOpenFoodFacts(barcode) {
 }
 
 
-async function fetchOpenFoodFactsByName(searchTerm) {
-  const fields = "product_name,nutriments,brands,code";
-  const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(searchTerm)}&fields=${fields}&page_size=10`;
-  const res = await fetch(url, { headers: { "Accept": "application/json" }});
-  if (!res.ok) throw new Error("Ошибка поиска Open Food Facts");
-  const data = await res.json();
-  const products = data.products || [];
+function productFromOpenFoodFacts(p, searchTerm) {
+  const n = p.nutriments || {};
+  const kcal = n["energy-kcal_100g"];
+  const protein = n["proteins_100g"];
+  const fat = n["fat_100g"];
+  const carbs = n["carbohydrates_100g"];
 
-  for (const p of products) {
-    const n = p.nutriments || {};
-    const kcal = n["energy-kcal_100g"];
-    const protein = n["proteins_100g"];
-    const fat = n["fat_100g"];
-    const carbs = n["carbohydrates_100g"];
-
-    if ([kcal, protein, fat, carbs].every(v => v !== undefined && v !== null && !Number.isNaN(Number(v)))) {
-      return {
-        id: uid(),
-        date: state.selectedDate,
-        barcode: p.code || "",
-        name: p.product_name || searchTerm,
-        grams: 100,
-        kcal100: round1(kcal),
-        protein100: round1(protein),
-        fat100: round1(fat),
-        carbs100: round1(carbs),
-        meal: "Перекус",
-        source: `Источник: Open Food Facts, поиск по названию «${searchTerm}»`
-      };
-    }
+  if ([kcal, protein, fat, carbs].some(v => v === undefined || v === null || Number.isNaN(Number(v)))) {
+    return null;
   }
 
+  const brand = String(p.brands || "").split(",")[0].trim();
+  const quantity = String(p.quantity || p.serving_size || "").trim();
+  const name = p.product_name || searchTerm;
+
+  return {
+    id: uid(),
+    date: state.selectedDate,
+    barcode: p.code || "",
+    name: brand && !String(name).toLowerCase().includes(brand.toLowerCase()) ? `${name} · ${brand}` : name,
+    grams: 100,
+    kcal100: round1(kcal),
+    protein100: round1(protein),
+    fat100: round1(fat),
+    carbs100: round1(carbs),
+    meal: "Перекус",
+    source: `Источник: Open Food Facts, поиск по названию «${searchTerm}»`,
+    meta: { brand, quantity }
+  };
+}
+
+async function fetchOpenFoodFactsOptions(searchTerm, limit = 12) {
+  const query = String(searchTerm || "").trim();
+  if (!query) return [];
+
+  const fields = "product_name,nutriments,brands,code,quantity,serving_size";
+  const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=${fields}&page_size=${Math.max(limit * 2, 20)}`;
+  const res = await fetch(url, { headers: { "Accept": "application/json" }});
+  if (!res.ok) throw new Error("Ошибка поиска Open Food Facts");
+
+  const data = await res.json();
+  const products = (data.products || [])
+    .map(p => productFromOpenFoodFacts(p, query))
+    .filter(Boolean);
+
+  const seen = new Set();
+  return products.filter(product => {
+    const key = `${normalizeFoodName(product.name)}|${product.barcode}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, limit);
+}
+
+async function fetchOpenFoodFactsByName(searchTerm) {
+  const products = await fetchOpenFoodFactsOptions(searchTerm, 10);
+  if (products.length) return products[0];
   throw new Error("БЖУ не найдено в Open Food Facts");
 }
 
@@ -1741,12 +1769,141 @@ function deleteFavorite(id) {
   render();
 }
 
-function copyYesterday() {
+function portionCalories(entry) {
+  return round1((Number(entry.kcal100) || 0) * (Number(entry.grams) || 0) / 100);
+}
+function portionProtein(entry) {
+  return round1((Number(entry.protein100) || 0) * (Number(entry.grams) || 0) / 100);
+}
+function portionFat(entry) {
+  return round1((Number(entry.fat100) || 0) * (Number(entry.grams) || 0) / 100);
+}
+function portionCarbs(entry) {
+  return round1((Number(entry.carbs100) || 0) * (Number(entry.grams) || 0) / 100);
+}
+
+function openYesterdayDialog() {
   const y = addDaysISO(state.selectedDate, -1);
-  const items = state.entries.filter(e => e.date === y);
-  if (!items.length) return alert("За вчера нет записей");
-  state.entries.push(...items.map(e => ({ ...e, id: uid(), date: state.selectedDate })));
+  yesterdayDialogItems = state.entries.filter(e => e.date === y);
+  yesterdayDialogAddedIndexes = new Set();
+  $("yesterdayDialogDate").textContent = `Рацион за ${formatDateLong(y)}`;
+  renderYesterdayDialog();
+  $("yesterdayDialog").showModal();
+}
+
+function renderYesterdayDialog() {
+  const box = $("yesterdayList");
+  if (!yesterdayDialogItems.length) {
+    $("yesterdayDialogStatus").textContent = "За вчера нет записей. Можно добавить продукт вручную или через поиск.";
+    box.innerHTML = `<div class="item"><div class="title">Пусто</div><div class="meta">Вчерашний рацион не найден.</div></div>`;
+    return;
+  }
+
+  $("yesterdayDialogStatus").textContent = "Можно добавить один или несколько продуктов. Уже добавленные варианты останутся отмеченными.";
+  box.innerHTML = yesterdayDialogItems.map((item, index) => {
+    const added = yesterdayDialogAddedIndexes.has(index);
+    return `<div class="item">
+      <div class="title">${escapeHtml(item.name)}</div>
+      <div class="meta">${escapeHtml(item.meal || "Перекус")} · ${round1(item.grams)} г · ${portionCalories(item)} ккал · Б ${portionProtein(item)} · Ж ${portionFat(item)} · У ${portionCarbs(item)}</div>
+      <div class="itemActions">
+        <button type="button" ${added ? "disabled" : ""} onclick="addYesterdayItem(${index})">${added ? "Добавлено" : "Добавить"}</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function addYesterdayItem(index) {
+  const item = yesterdayDialogItems[index];
+  if (!item || yesterdayDialogAddedIndexes.has(index)) return;
+  state.entries.push({ ...item, id: uid(), date: state.selectedDate });
+  yesterdayDialogAddedIndexes.add(index);
   render();
+  renderYesterdayDialog();
+}
+
+
+function openProductSearchDialog(initialQuery = "") {
+  productSearchResults = [];
+  $("productSearchInput").value = initialQuery;
+  $("productSearchStatus").textContent = "Введите название продукта и нажмите “Искать”.";
+  $("productSearchList").innerHTML = "";
+  $("productSearchDialog").showModal();
+  setTimeout(() => $("productSearchInput")?.focus(), 80);
+}
+
+async function searchProductByName(event) {
+  event.preventDefault();
+  const query = $("productSearchInput").value.trim();
+  if (!query) {
+    $("productSearchInput").focus();
+    return;
+  }
+
+  $("productSearchStatus").textContent = `Ищу продукты по запросу «${query}»...`;
+  $("productSearchList").innerHTML = `<div class="item"><div class="title">Поиск...</div><div class="meta">Загружаю варианты из открытой базы.</div></div>`;
+
+  try {
+    productSearchResults = await fetchOpenFoodFactsOptions(query, 12);
+    renderProductSearchResults(query);
+  } catch (e) {
+    productSearchResults = [];
+    $("productSearchStatus").textContent = e.message || "Не удалось выполнить поиск";
+    $("productSearchList").innerHTML = `<div class="item">
+      <div class="title">Ничего не найдено</div>
+      <div class="meta">Можно открыть ручное добавление с этим названием.</div>
+      <div class="itemActions"><button type="button" onclick="openManualFromProductSearch()">Добавить вручную</button></div>
+    </div>`;
+  }
+}
+
+function renderProductSearchResults(query) {
+  const box = $("productSearchList");
+  if (!productSearchResults.length) {
+    $("productSearchStatus").textContent = `По запросу «${query}» не найдено продуктов с полным КБЖУ.`;
+    box.innerHTML = `<div class="item">
+      <div class="title">Нет подходящих вариантов</div>
+      <div class="meta">Откройте ручное добавление, название уже будет заполнено.</div>
+      <div class="itemActions"><button type="button" onclick="openManualFromProductSearch()">Добавить вручную</button></div>
+    </div>`;
+    return;
+  }
+
+  $("productSearchStatus").textContent = `Найдено вариантов: ${productSearchResults.length}. Выберите подходящий продукт.`;
+  box.innerHTML = productSearchResults.map((product, index) => {
+    const meta = [product.meta?.brand, product.meta?.quantity].filter(Boolean).join(" · ");
+    return `<div class="item">
+      <div class="title">${escapeHtml(product.name)}</div>
+      <div class="meta">${meta ? escapeHtml(meta) + " · " : ""}${Math.round(product.kcal100)} ккал / 100 г · Б ${round1(product.protein100)} · Ж ${round1(product.fat100)} · У ${round1(product.carbs100)}</div>
+      <div class="itemActions">
+        <button type="button" onclick="selectProductSearchResult(${index})">Выбрать</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function selectProductSearchResult(index) {
+  const product = productSearchResults[index];
+  if (!product) return;
+  $("productSearchDialog").close();
+  openFoodDialog({ ...product, id: uid(), date: state.selectedDate, grams: 100 });
+}
+
+function openManualFromProductSearch() {
+  const query = $("productSearchInput").value.trim();
+  $("productSearchDialog").close();
+  openFoodDialog({
+    id: uid(),
+    date: state.selectedDate,
+    barcode: "",
+    name: query,
+    grams: 100,
+    kcal100: 0,
+    protein100: 0,
+    fat100: 0,
+    carbs100: 0,
+    meal: "Перекус",
+    source: query ? `Ручной ввод после поиска «${query}»` : "Ручной ввод"
+  });
 }
 
 function saveBody() {
@@ -1893,10 +2050,15 @@ $("recognitionBackBtn").addEventListener("click", closeRecognitionDialog);
 $("recognitionRetakeBtn").addEventListener("click", retakeRecognitionPhoto);
 $("recognitionAddPhotoBtn").addEventListener("click", addRecognitionPhoto);
 $("recognitionManualBtn").addEventListener("click", openManualFromRecognition);
+$("searchProductBtn").addEventListener("click", () => openProductSearchDialog());
 $("manualBtn").addEventListener("click", () => openFoodDialog());
 $("favoritesBtn").addEventListener("click", () => { renderFavorites(); $("favoritesDialog").showModal(); });
 $("closeFavorites").addEventListener("click", () => $("favoritesDialog").close());
-$("copyYesterdayBtn").addEventListener("click", copyYesterday);
+$("closeProductSearch").addEventListener("click", () => $("productSearchDialog").close());
+$("productSearchForm").addEventListener("submit", searchProductByName);
+$("closeYesterdayDialog").addEventListener("click", () => $("yesterdayDialog").close());
+$("doneYesterdayDialog").addEventListener("click", () => $("yesterdayDialog").close());
+$("copyYesterdayBtn").addEventListener("click", openYesterdayDialog);
 $("datePicker").addEventListener("change", e => { state.selectedDate = e.target.value; render(); });
 
 $("closeScanner").addEventListener("click", () => {
