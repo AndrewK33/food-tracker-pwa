@@ -351,7 +351,96 @@ async function fetchOpenFoodFacts(barcode) {
 }
 
 
-function productFromOpenFoodFacts(p, searchTerm) {
+const PRODUCT_QUERY_TRANSLATIONS = [
+  { ru: ["яйцо", "яйца", "яичный"], en: ["egg", "eggs"] },
+  { ru: ["молоко"], en: ["milk"] },
+  { ru: ["миндаль"], en: ["almond", "almonds"] },
+  { ru: ["гречка", "гречневая каша"], en: ["buckwheat", "buckwheat porridge"] },
+  { ru: ["творог"], en: ["cottage cheese", "quark"] },
+  { ru: ["куриная грудка", "грудка куриная"], en: ["chicken breast"] },
+  { ru: ["курица"], en: ["chicken"] },
+  { ru: ["рис"], en: ["rice"] },
+  { ru: ["овсянка", "овсяная каша"], en: ["oatmeal", "porridge"] },
+  { ru: ["йогурт"], en: ["yogurt", "yoghurt"] },
+  { ru: ["кефир"], en: ["kefir"] },
+  { ru: ["сыр"], en: ["cheese"] },
+  { ru: ["банан"], en: ["banana"] },
+  { ru: ["яблоко"], en: ["apple"] },
+  { ru: ["помидор", "томат"], en: ["tomato"] },
+  { ru: ["огурец"], en: ["cucumber"] },
+  { ru: ["картофель", "картошка"], en: ["potato"] },
+  { ru: ["хлеб"], en: ["bread"] },
+  { ru: ["макароны", "паста"], en: ["pasta", "macaroni"] },
+  { ru: ["говядина"], en: ["beef"] },
+  { ru: ["свинина"], en: ["pork"] },
+  { ru: ["лосось"], en: ["salmon"] },
+  { ru: ["тунец"], en: ["tuna"] }
+];
+
+const LOCAL_NUTRITION_DB = [
+  { names: ["яйцо", "яйца"], display: "Яйцо куриное", search: "egg", kcal100: 143, protein100: 12.6, fat100: 9.5, carbs100: 0.7 },
+  { names: ["молоко"], display: "Молоко 2.5%", search: "milk", kcal100: 52, protein100: 2.8, fat100: 2.5, carbs100: 4.7 },
+  { names: ["миндаль"], display: "Миндаль", search: "almonds", kcal100: 579, protein100: 21.2, fat100: 49.9, carbs100: 21.6 },
+  { names: ["гречка", "гречневая каша"], display: "Гречка варёная", search: "buckwheat porridge", kcal100: 110, protein100: 3.6, fat100: 1.1, carbs100: 21.3 },
+  { names: ["творог"], display: "Творог 5%", search: "cottage cheese", kcal100: 121, protein100: 17.2, fat100: 5, carbs100: 1.8 },
+  { names: ["куриная грудка", "грудка куриная"], display: "Куриная грудка готовая", search: "chicken breast", kcal100: 165, protein100: 31, fat100: 3.6, carbs100: 0 },
+  { names: ["рис"], display: "Рис варёный", search: "rice cooked", kcal100: 130, protein100: 2.7, fat100: 0.3, carbs100: 28.2 },
+  { names: ["овсянка", "овсяная каша"], display: "Овсяная каша на воде", search: "oatmeal", kcal100: 68, protein100: 2.4, fat100: 1.4, carbs100: 12 },
+  { names: ["йогурт"], display: "Йогурт натуральный", search: "plain yogurt", kcal100: 61, protein100: 3.5, fat100: 3.3, carbs100: 4.7 },
+  { names: ["кефир"], display: "Кефир 2.5%", search: "kefir", kcal100: 53, protein100: 3, fat100: 2.5, carbs100: 4 },
+  { names: ["банан"], display: "Банан", search: "banana", kcal100: 89, protein100: 1.1, fat100: 0.3, carbs100: 22.8 },
+  { names: ["яблоко"], display: "Яблоко", search: "apple", kcal100: 52, protein100: 0.3, fat100: 0.2, carbs100: 13.8 },
+  { names: ["огурец"], display: "Огурец", search: "cucumber", kcal100: 15, protein100: 0.7, fat100: 0.1, carbs100: 3.6 },
+  { names: ["помидор", "томат"], display: "Помидор", search: "tomato", kcal100: 18, protein100: 0.9, fat100: 0.2, carbs100: 3.9 },
+  { names: ["картофель", "картошка"], display: "Картофель варёный", search: "boiled potato", kcal100: 87, protein100: 1.9, fat100: 0.1, carbs100: 20.1 },
+  { names: ["хлеб"], display: "Хлеб", search: "bread", kcal100: 265, protein100: 9, fat100: 3.2, carbs100: 49 },
+  { names: ["макароны", "паста"], display: "Макароны варёные", search: "cooked pasta", kcal100: 158, protein100: 5.8, fat100: 0.9, carbs100: 30.9 },
+  { names: ["сыр"], display: "Сыр твёрдый", search: "cheese", kcal100: 356, protein100: 24, fat100: 28, carbs100: 2 },
+  { names: ["говядина"], display: "Говядина готовая", search: "beef", kcal100: 250, protein100: 26, fat100: 15, carbs100: 0 },
+  { names: ["лосось"], display: "Лосось", search: "salmon", kcal100: 208, protein100: 20, fat100: 13, carbs100: 0 }
+];
+
+function containsRussianText(value) {
+  return /[А-Яа-яЁё]/.test(String(value || ""));
+}
+
+function expandProductSearchTerms(query) {
+  const original = String(query || "").trim();
+  const lower = original.toLowerCase();
+  const terms = [original];
+
+  for (const item of PRODUCT_QUERY_TRANSLATIONS) {
+    if (item.ru.some(ru => lower.includes(ru))) {
+      terms.push(...item.ru, ...item.en);
+    }
+  }
+
+  return [...new Set(terms.map(t => String(t || "").trim()).filter(Boolean))].slice(0, 8);
+}
+
+function localNutritionProducts(query) {
+  const lower = normalizeFoodName(query);
+  if (!lower) return [];
+
+  return LOCAL_NUTRITION_DB
+    .filter(item => item.names.some(name => lower.includes(name) || normalizeFoodName(name).includes(lower)))
+    .map(item => ({
+      id: uid(),
+      date: state.selectedDate,
+      barcode: "",
+      name: item.display,
+      grams: 100,
+      kcal100: round1(item.kcal100),
+      protein100: round1(item.protein100),
+      fat100: round1(item.fat100),
+      carbs100: round1(item.carbs100),
+      meal: "Перекус",
+      source: `Источник: Локальный справочник, запрос «${query}»`,
+      meta: { brand: "Локальный справочник", quantity: "базовое значение на 100 г", searchName: item.search }
+    }));
+}
+
+function productFromOpenFoodFacts(p, searchTerm, sourceLabel = "Open Food Facts") {
   const n = p.nutriments || {};
   const kcal = n["energy-kcal_100g"];
   const protein = n["proteins_100g"];
@@ -377,28 +466,44 @@ function productFromOpenFoodFacts(p, searchTerm) {
     fat100: round1(fat),
     carbs100: round1(carbs),
     meal: "Перекус",
-    source: `Источник: Open Food Facts, поиск по названию «${searchTerm}»`,
-    meta: { brand, quantity }
+    source: `Источник: ${sourceLabel}, поиск по названию «${searchTerm}»`,
+    meta: { brand: brand || sourceLabel, quantity }
   };
+}
+
+async function fetchOpenFoodFactsFromEndpoint(baseUrl, query, sourceLabel, limit = 8) {
+  const fields = "product_name,nutriments,brands,code,quantity,serving_size";
+  const url = `${baseUrl}/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=${fields}&page_size=${Math.max(limit * 2, 16)}`;
+  const res = await fetch(url, { headers: { "Accept": "application/json" }});
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  return (data.products || [])
+    .map(p => productFromOpenFoodFacts(p, query, sourceLabel))
+    .filter(Boolean);
 }
 
 async function fetchOpenFoodFactsOptions(searchTerm, limit = 12) {
   const query = String(searchTerm || "").trim();
   if (!query) return [];
 
-  const fields = "product_name,nutriments,brands,code,quantity,serving_size";
-  const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=${fields}&page_size=${Math.max(limit * 2, 20)}`;
-  const res = await fetch(url, { headers: { "Accept": "application/json" }});
-  if (!res.ok) throw new Error("Ошибка поиска Open Food Facts");
+  const expandedTerms = expandProductSearchTerms(query);
+  const localResults = localNutritionProducts(query);
+  const requests = [];
 
-  const data = await res.json();
-  const products = (data.products || [])
-    .map(p => productFromOpenFoodFacts(p, query))
-    .filter(Boolean);
+  for (const term of expandedTerms) {
+    const isRussian = containsRussianText(term);
+    requests.push(fetchOpenFoodFactsFromEndpoint("https://ru.openfoodfacts.org", term, "Open Food Facts RU", 6));
+    requests.push(fetchOpenFoodFactsFromEndpoint("https://world.openfoodfacts.org", term, isRussian ? "Open Food Facts World RU" : "Open Food Facts World", 6));
+  }
+
+  const settled = await Promise.allSettled(requests);
+  const externalResults = settled.flatMap(result => result.status === "fulfilled" ? result.value : []);
+  const all = [...localResults, ...externalResults];
 
   const seen = new Set();
-  return products.filter(product => {
-    const key = `${normalizeFoodName(product.name)}|${product.barcode}`;
+  return all.filter(product => {
+    const key = `${normalizeFoodName(product.name)}|${product.barcode || product.source}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -408,7 +513,7 @@ async function fetchOpenFoodFactsOptions(searchTerm, limit = 12) {
 async function fetchOpenFoodFactsByName(searchTerm) {
   const products = await fetchOpenFoodFactsOptions(searchTerm, 10);
   if (products.length) return products[0];
-  throw new Error("БЖУ не найдено в Open Food Facts");
+  throw new Error("БЖУ не найдено в открытых источниках");
 }
 
 function resizeImageToDataUrl(file, maxSize = 1024, quality = 0.82) {
@@ -1840,7 +1945,7 @@ async function searchProductByName(event) {
   }
 
   $("productSearchStatus").textContent = `Ищу продукты по запросу «${query}»...`;
-  $("productSearchList").innerHTML = `<div class="item"><div class="title">Поиск...</div><div class="meta">Загружаю варианты из открытой базы.</div></div>`;
+  $("productSearchList").innerHTML = `<div class="item"><div class="title">Поиск...</div><div class="meta">Проверяю локальный справочник, русскоязычный и мировой Open Food Facts.</div></div>`;
 
   try {
     productSearchResults = await fetchOpenFoodFactsOptions(query, 12);
@@ -1868,7 +1973,7 @@ function renderProductSearchResults(query) {
     return;
   }
 
-  $("productSearchStatus").textContent = `Найдено вариантов: ${productSearchResults.length}. Выберите подходящий продукт.`;
+  $("productSearchStatus").textContent = `Найдено вариантов: ${productSearchResults.length}. Запрос расширен переводом и несколькими источниками.`;
   box.innerHTML = productSearchResults.map((product, index) => {
     const meta = [product.meta?.brand, product.meta?.quantity].filter(Boolean).join(" · ");
     return `<div class="item">
